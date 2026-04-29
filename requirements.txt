@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sentence-transformers
+transformers
+spacy
+torch
+pydantic
+scipy
+qdrant-client
+fastembed
+google-genai
+python-dotenv
+streamlit
+torchvision
