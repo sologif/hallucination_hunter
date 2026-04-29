@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hallucination Hunter</title>
+    <!-- Premium UI uses Inter and Outfit fonts, loaded via CSS -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Dynamic Ambient Background -->
+    <div class="background-wrapper">
+        <div class="ambient-blob blob-1"></div>
+        <div class="ambient-blob blob-2"></div>
+    </div>
+    
+    <div class="container">
+        <header>
+            <h1>Hallucination <span>Hunter</span></h1>
+            <p>Enterprise-grade AI verification. Grounded against factual sources to eliminate hallucinations using Natural Language Inference.</p>
+        </header>
+
+        <main>
+            <!-- Input Panel -->
+            <div class="glass-panel input-section">
+                <div class="input-group">
+                    <label for="queryInput">Enter your prompt or question for the AI</label>
+                    <textarea id="queryInput" placeholder="e.g., What's the airspeed velocity of a European swallow carrying a coconut according to the 2019 Cambridge Ornithology Review?"></textarea>
+                </div>
+                
+                <div class="actions">
+                    <button id="analyzeBtn">Analyze Response</button>
+                    <div id="loader" class="loader-container hidden">
+                        <div class="spinner"></div>
+                        <span>Hunting for Hallucinations...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div id="resultsSection" class="results-section hidden">
+                <div class="results-grid">
+                    
+                    <!-- Verdict & Score -->
+                    <div class="glass-panel verdict-card">
+                        <div class="score-container">Confidence Score</div>
+                        <h2 id="overallVerdict">FAITHFUL</h2>
+                        <div id="confidenceScore" class="score">0%</div>
+                    </div>
+
+                    <!-- AI Answer -->
+                    <div class="glass-panel content-card answer-card">
+                        <h3>Generated Answer</h3>
+                        <p id="generatedAnswerText" class="answer-text">...</p>
+                    </div>
+
+                    <!-- Retrieved Sources -->
+                    <div class="glass-panel content-card sources-card">
+                        <h3>Ground Truth Sources</h3>
+                        <ul id="sourcesList" class="source-list">
+                            <!-- Sources injected via JS -->
+                        </ul>
+                    </div>
+
+                    <!-- Detailed Analysis -->
+                    <div class="analysis-details">
+                        <h3>Sentence-Level Validation</h3>
+                        <div id="claimsContainer" class="claims-list">
+                            <!-- Claims injected via JS -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
