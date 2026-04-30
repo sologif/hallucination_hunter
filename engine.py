@@ -4,13 +4,7 @@ import torch
 import numpy as np
 
 # Load models globally to avoid reloading
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    print("Downloading en_core_web_sm...")
-    from spacy.cli import download
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
 
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
 nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
