@@ -1,10 +1,11 @@
 import spacy
+import en_core_web_sm
 from sentence_transformers import SentenceTransformer, util, CrossEncoder
 import torch
 import numpy as np
 
 # Load models globally to avoid reloading
-nlp = spacy.load("en_core_web_sm")
+nlp = en_core_web_sm.load()
 
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
 nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
