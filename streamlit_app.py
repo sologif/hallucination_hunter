@@ -3,6 +3,13 @@ from engine import analyze_hallucination
 from rag.vector_db import db as vector_db
 from rag.generator import generate_answer
 import html
+import os
+
+# Handle Hugging Face Token for higher rate limits
+if "HF_TOKEN" in st.secrets:
+    os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
+elif "hf_token" in st.secrets:
+    os.environ["HF_TOKEN"] = st.secrets["hf_token"]
 
 st.set_page_config(
     page_title="Hallucination Hunter",
