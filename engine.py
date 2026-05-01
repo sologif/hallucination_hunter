@@ -159,7 +159,7 @@ def analyze_hallucination(source_text: str, generated_text: str):
             else:
                 label = LABEL_MAPPING.get(label_idx, "Unknown")
                 ent_prob = probs[1]
-                is_hallucinated = (label in ["Contradiction", "Neutral"])
+                is_hallucinated = (label == "Contradiction")
                 
             pair_results[idx] = {
                 "label": label,
@@ -229,9 +229,9 @@ def analyze_hallucination(source_text: str, generated_text: str):
     contradiction_rate = contradiction_count / num_claims
     unverified_rate = (neutral_count + unsupported_count) / num_claims
     
-    if contradiction_rate > 0.1:
+    if contradiction_rate > 0.15:
         overall_verdict = "HALLUCINATED"
-    elif unverified_rate > 0.3:
+    elif unverified_rate > 0.4:
         overall_verdict = "WARNING"
     else:
         overall_verdict = "FAITHFUL"

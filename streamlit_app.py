@@ -445,28 +445,56 @@ else:
         st.markdown('<div class="main-title" style="font-size:1.5rem;">HaluEval <span>Playground</span></div>', unsafe_allow_html=True)
         st.write("Automatically load benchmark samples to test the model.")
         
-        if st.button("🎲 Load Random HaluEval Sample"):
-            try:
-                # Use datasets library to load sample (Cloud compatible)
-                import random
-                ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
-                # Proper shuffle and larger skip range
-                ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
-                skip = random.randint(0, 2000)
-                sample = None
-                for i, s in enumerate(ds):
-                    if i == skip:
-                        sample = s
-                        break
-                
-                if sample:
-                    # Update session state keys directly to ensure UI reflects changes
-                    st.session_state["verify_input"] = sample["hallucinated_summary"]
-                    st.session_state["hidden_ground_truth"] = sample["document"]
-                    st.success("Loaded HaluEval Sample!")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error loading sample: {e}")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎲 Load Random Hallucinated Sample"):
+                # Clear previous sample first
+                st.session_state.pop("verify_input", None)
+                st.session_state.pop("hidden_ground_truth", None)
+                st.session_state.pop("sample_loaded", None)
+                try:
+                    import random
+                    ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
+                    ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                    skip = random.randint(0, 2000)
+                    sample = None
+                    for i, s in enumerate(ds):
+                        if i == skip:
+                            sample = s
+                            break
+                    if sample:
+                        st.session_state["verify_input"] = sample["hallucinated_summary"]
+                        st.session_state["hidden_ground_truth"] = sample["document"]
+                        st.session_state["sample_loaded"] = True
+                        st.success("Loaded Hallucinated Sample!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading sample: {e}")
+        
+        with col2:
+            if st.button("✅ Load Random Faithful Sample"):
+                # Clear previous sample first
+                st.session_state.pop("verify_input", None)
+                st.session_state.pop("hidden_ground_truth", None)
+                st.session_state.pop("sample_loaded", None)
+                try:
+                    import random
+                    ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
+                    ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                    skip = random.randint(0, 2000)
+                    sample = None
+                    for i, s in enumerate(ds):
+                        if i == skip:
+                            sample = s
+                            break
+                    if sample:
+                        st.session_state["verify_input"] = sample["right_summary"]
+                        st.session_state["hidden_ground_truth"] = sample["document"]
+                        st.session_state["sample_loaded"] = True
+                        st.success("Loaded Faithful Sample!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading sample: {e}")
         
         st.markdown("---")
         if st.button("🚪 Log out"):
@@ -599,7 +627,7 @@ else:
                 </div>
                 <div class="source-match">
                     <strong>Closest Ground Truth Match</strong>
-                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.35 else 'No direct semantic match found in the provided sources.'}"</p>
+                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.5 else 'No source supports this claim — it is likely fabricated.'}"</p>
                 </div>
                 <div class="metrics-bar">
                     <div class="metric">
@@ -621,29 +649,64 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("Directly paste an AI-generated answer here. You can also provide the ground truth text to verify against.")
         
-        # New: Direct button for those who can't see the sidebar
-        if st.button("🎲 Load Random HaluEval Sample", key="tab_sample_loader"):
-            try:
-                import random
-                ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
-                ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
-                skip = random.randint(0, 2000)
-                sample = None
-                for i, s in enumerate(ds):
-                    if i == skip:
-                        sample = s
-                        break
-                if sample:
-                    # Update session state keys directly to ensure UI reflects changes
-                    st.session_state["verify_input"] = sample["hallucinated_summary"]
-                    st.session_state["hidden_ground_truth"] = sample["document"]
-                    st.success("Loaded HaluEval Sample!")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error loading sample: {e}")
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            if st.button("🎲 Load Random Hallucinated Sample", key="tab_hallucinated_loader"):
+                # Clear previous sample first
+                st.session_state.pop("verify_input", None)
+                st.session_state.pop("hidden_ground_truth", None)
+                st.session_state.pop("sample_loaded", None)
+                try:
+                    import random
+                    ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
+                    ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                    skip = random.randint(0, 2000)
+                    sample = None
+                    for i, s in enumerate(ds):
+                        if i == skip:
+                            sample = s
+                            break
+                    if sample:
+                        st.session_state["verify_input"] = sample["hallucinated_summary"]
+                        st.session_state["hidden_ground_truth"] = sample["document"]
+                        st.session_state["sample_loaded"] = True
+                        st.success("Loaded Hallucinated Sample!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading sample: {e}")
+        
+        with col_t2:
+            if st.button("✅ Load Random Faithful Sample", key="tab_faithful_loader"):
+                # Clear previous sample first
+                st.session_state.pop("verify_input", None)
+                st.session_state.pop("hidden_ground_truth", None)
+                st.session_state.pop("sample_loaded", None)
+                try:
+                    import random
+                    ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
+                    ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                    skip = random.randint(0, 2000)
+                    sample = None
+                    for i, s in enumerate(ds):
+                        if i == skip:
+                            sample = s
+                            break
+                    if sample:
+                        st.session_state["verify_input"] = sample["right_summary"]
+                        st.session_state["hidden_ground_truth"] = sample["document"]
+                        st.session_state["sample_loaded"] = True
+                        st.success("Loaded Faithful Sample!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading sample: {e}")
 
         # Handle inputs from session state (HaluEval Sample)
-        pasted_text = st.text_area("Paste text to verify", height=150, key="verify_input")
+        pasted_text = st.text_area(
+            "Paste text to verify",
+            height=150,
+            key="verify_input",
+            value=st.session_state.get("verify_input", "")
+        )
         
         col1, col2 = st.columns(2)
         with col1:
@@ -651,7 +714,12 @@ else:
         with col2:
             use_hidden_truth = False
             if "hidden_ground_truth" in st.session_state:
-                use_hidden_truth = st.toggle("Use Loaded HaluEval Ground Truth", value=True, key="use_hidden_truth")
+                default_toggle = st.session_state.get("sample_loaded", False)
+                use_hidden_truth = st.toggle(
+                    "Use Loaded HaluEval Ground Truth",
+                    value=default_toggle,
+                    key="use_hidden_truth"
+                )
 
         custom_ground_truth = ""
         if not use_web_verify and not use_hidden_truth:
@@ -683,7 +751,7 @@ else:
                     if should_use_web:
                         st.write("🔍 Searching live web for grounded evidence...")
                         # Always use the original claim text as search query — never pollute with local snippets
-                        search_query = pasted_text[:200] if len(pasted_text) > 200 else pasted_text
+                        search_query = pasted_text.split(".")[0][:80]  # first sentence only, max 80 chars
                         web_sources = search_web(search_query, limit=5)
                         
                         # Fallback: try a shorter version of the claim if initial search yields nothing
