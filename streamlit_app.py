@@ -447,8 +447,8 @@ else:
                 import random
                 ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
                 # Proper shuffle and larger skip range
-                ds = ds.shuffle(seed=random.randint(0, 10000), buffer_size=1000)
-                skip = random.randint(0, 500)
+                ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                skip = random.randint(0, 2000)
                 sample = None
                 for i, s in enumerate(ds):
                     if i == skip:
@@ -487,9 +487,11 @@ else:
         
         st.markdown(f"""
         <div class="verdict-card {verdict_class}">
-            <div class="score-container">{verification_result.get('verified_claims', 0)}/{verification_result.get('total_claims', 0)} claims supported</div>
             <div class="verdict-title verdict-{verdict_class}">{verdict}</div>
-            <div class="score">{score:.2f}% Verified</div>
+            <div class="score-container">
+                <span class="score">{verification_result.get('verified_claims', 0)}/{verification_result.get('total_claims', 0)}</span> claims supported
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">{score:.1f}% Verified</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -607,7 +609,7 @@ else:
                 labels=dict(x="Source Sentences", y="Generated Claims", color="Similarity"),
                 x=x_labels,
                 y=y_labels,
-                color_continuous_scale="Viridis",
+                color_continuous_scale="Magma",
                 aspect="auto"
             )
             
@@ -669,8 +671,8 @@ else:
             try:
                 import random
                 ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
-                ds = ds.shuffle(seed=random.randint(0, 10000), buffer_size=1000)
-                skip = random.randint(0, 500)
+                ds = ds.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                skip = random.randint(0, 2000)
                 sample = None
                 for i, s in enumerate(ds):
                     if i == skip:
@@ -743,20 +745,21 @@ else:
         st.markdown('<div class="analysis-title">HaluEval Benchmarking Dashboard</div>', unsafe_allow_html=True)
         st.write("Evaluate the engine's performance against the industry-standard HaluEval dataset.")
         
-        col_a, col_b = st.columns(2)
         with col_a:
-            dataset_option = st.selectbox("Select HaluEval Dataset", 
-                                        ["Summarization", "QA", "Dialogue"], 
+            dataset_option = st.selectbox("Select Benchmark Dataset", 
+                                        ["Summarization (HaluEval)", "QA (HaluEval)", "Dialogue (HaluEval)", "TRUE Benchmark (google-research/true)"], 
                                         index=0)
         with col_b:
             sample_count = st.slider("Sample Size", 20, 200, 50)
             
-        dataset_paths = {
-            "Summarization": "data/HaluEval/data/summarization_data.json",
-            "QA": "data/HaluEval/data/qa_data.json",
-            "Dialogue": "data/HaluEval/data/dialogue_data.json"
+        # Mapping for HaluEval subsets and TRUE
+        mappings = {
+            "Summarization (HaluEval)": {"subset": "summarization", "knowledge": "document", "faithful": "right_summary", "hallucinated": "hallucinated_summary", "source": "pminervini/HaluEval"},
+            "QA (HaluEval)": {"subset": "qa", "knowledge": "knowledge", "faithful": "right_answer", "hallucinated": "hallucinated_answer", "source": "pminervini/HaluEval"},
+            "Dialogue (HaluEval)": {"subset": "dialogue", "knowledge": "knowledge", "faithful": "right_response", "hallucinated": "hallucinated_response", "source": "pminervini/HaluEval"},
+            "TRUE Benchmark (google-research/true)": {"subset": "qags_cnndm", "knowledge": "premise", "faithful": "hypothesis", "hallucinated": None, "source": "google-research/true"}
         }
-        
+            
         if st.button("Run Benchmark Run"):
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -765,18 +768,16 @@ else:
             y_true = []
             y_pred = []
             
-            # Column Mappings for HaluEval HF dataset
-            mappings = {
-                "Summarization": {"subset": "summarization", "knowledge": "document", "faithful": "right_summary", "hallucinated": "hallucinated_summary"},
-                "QA": {"subset": "qa", "knowledge": "knowledge", "faithful": "right_answer", "hallucinated": "hallucinated_answer"},
-                "Dialogue": {"subset": "dialogue", "knowledge": "knowledge", "faithful": "right_response", "hallucinated": "hallucinated_response"}
-            }
-            
             m = mappings[dataset_option]
             
             try:
                 status_text.text(f"Loading {dataset_option} dataset from Hugging Face...")
-                dataset = load_dataset("pminervini/HaluEval", m["subset"], split="data", streaming=True)
+                dataset = load_dataset(m["source"], m["subset"], split="data" if "HaluEval" in m["source"] else "train", streaming=True)
+                
+                # Shuffle the dataset to avoid bias
+                import random
+                dataset = dataset.shuffle(seed=random.randint(0, 1000000), buffer_size=5000)
+                
                 # Take only the requested sample count
                 data = []
                 for i, entry in enumerate(dataset):
@@ -789,21 +790,39 @@ else:
                     progress_bar.progress((i + 1) / len(data))
                     
                     knowledge = item.get(m["knowledge"], "")
-                    faithful_ans = item.get(m["faithful"], "")
-                    hallucinated_ans = item.get(m["hallucinated"], "")
                     
-                    if knowledge:
-                        # Test Faithful
-                        res_f = analyze_hallucination(knowledge, faithful_ans)
-                        y_true.append(0) # 0 = Faithful
-                        y_pred.append(0 if res_f["verdict"] == "FAITHFUL" else 1)
-                        results_data.append({"Type": "Faithful", "Prediction": res_f["verdict"], "Correct": res_f["verdict"] == "FAITHFUL"})
+                    if "TRUE" in dataset_option:
+                        # TRUE format: premise, hypothesis, label (1=Entailment, 0=Not)
+                        hypothesis = item.get(m["faithful"], "")
+                        label = item.get("label", 1) # 1 in TRUE is Entailment (Faithful)
                         
-                        # Test Hallucinated
-                        res_h = analyze_hallucination(knowledge, hallucinated_ans)
-                        y_true.append(1) # 1 = Hallucinated
-                        y_pred.append(1 if res_h["verdict"] == "HALLUCINATED" else 0)
-                        results_data.append({"Type": "Hallucinated", "Prediction": res_h["verdict"], "Correct": res_h["verdict"] == "HALLUCINATED"})
+                        res = analyze_hallucination(knowledge, hypothesis)
+                        # Map labels to binary: 0=Faithful, 1=Hallucinated
+                        ground_truth = 0 if label == 1 else 1
+                        prediction = 1 if res["verdict"] == "HALLUCINATED" else 0
+                        
+                        y_true.append(ground_truth)
+                        y_pred.append(prediction)
+                        
+                        type_str = "Faithful" if ground_truth == 0 else "Hallucinated"
+                        results_data.append({"Type": type_str, "Prediction": res["verdict"], "Correct": ground_truth == prediction})
+                    else:
+                        # HaluEval format: document, right_summary, hallucinated_summary
+                        faithful_ans = item.get(m["faithful"], "")
+                        hallucinated_ans = item.get(m["hallucinated"], "")
+                        
+                        if knowledge:
+                            # Test Faithful
+                            res_f = analyze_hallucination(knowledge, faithful_ans)
+                            y_true.append(0) # 0 = Faithful
+                            y_pred.append(0 if res_f["verdict"] == "FAITHFUL" else 1)
+                            results_data.append({"Type": "Faithful", "Prediction": res_f["verdict"], "Correct": res_f["verdict"] == "FAITHFUL"})
+                            
+                            # Test Hallucinated
+                            res_h = analyze_hallucination(knowledge, hallucinated_ans)
+                            y_true.append(1) # 1 = Hallucinated
+                            y_pred.append(1 if res_h["verdict"] == "HALLUCINATED" else 0)
+                            results_data.append({"Type": "Hallucinated", "Prediction": res_h["verdict"], "Correct": res_h["verdict"] == "HALLUCINATED"})
 
                 # Metrics Calculation
                 tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
@@ -818,26 +837,32 @@ else:
                 balanced_acc = (recall + specificity) / 2
                 
                 # Display Metrics
+                st.markdown("### 📊 Performance Metrics")
                 m1, m2, m3, m4, m5 = st.columns(5)
                 m1.metric("Accuracy", f"{accuracy:.1%}")
-                m2.metric("Balanced Acc", f"{balanced_acc:.1%}")
-                m3.metric("Hallucination Precision", f"{precision:.1%}")
-                m4.metric("True Positives", tp)
-                m5.metric("Missed", fn)
+                m2.metric("Balanced Acc", f"{balanced_acc:.1%}", help="Primary metric: Average of Sensitivity and Specificity")
+                m3.metric("Precision (Claims)", f"{precision:.1%}", help="% of flagged hallucinations that were actually incorrect")
+                m4.metric("Caught", tp, help="True Positives")
+                m5.metric("Missed", fn, help="False Negatives")
                 
                 # Visualizations
-                df = pd.DataFrame(results_data)
-                fig = px.pie(df, names='Correct', title='Overall Prediction Accuracy', color='Correct',
-                           color_discrete_map={True: '#10b981', False: '#ef4444'})
-                st.plotly_chart(fig, use_container_width=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    df = pd.DataFrame(results_data)
+                    fig = px.pie(df, names='Correct', title='Overall Prediction Accuracy', color='Correct',
+                               color_discrete_map={True: '#10b981', False: '#ef4444'})
+                    st.plotly_chart(fig, use_container_width=True)
                 
-                # Type Comparison
-                fig2 = px.bar(df, x='Type', color='Correct', barmode='group', title='Accuracy by Sample Type',
-                            color_discrete_map={True: '#10b981', False: '#ef4444'})
-                st.plotly_chart(fig2, use_container_width=True)
+                with col2:
+                    # Type Comparison
+                    fig2 = px.bar(df, x='Type', color='Correct', barmode='group', title='Accuracy by Sample Type',
+                                color_discrete_map={True: '#10b981', False: '#ef4444'})
+                    st.plotly_chart(fig2, use_container_width=True)
                 
                 st.write("Detailed Breakdown:")
                 st.dataframe(df, use_container_width=True)
                 
             except Exception as e:
-                st.error(f"Error loading or evaluating dataset: {e}")
+                st.error(f"Error evaluating dataset: {e}")
+                import traceback
+                st.code(traceback.format_exc())

@@ -109,12 +109,12 @@ def analyze_hallucination(source_text: str, generated_text: str):
             "is_hallucinated": bool(is_hallucinated)
         })
         
-    avg_confidence = round((verified_claims_count / num_claims) * 100, 2)
+    verified_claims_ratio = round((verified_claims_count / num_claims) * 100, 2)
     overall_verdict = "HALLUCINATED" if has_hallucination else "FAITHFUL"
     
     return {
         "verdict": overall_verdict,
-        "confidence_score": float(avg_confidence),
+        "confidence_score": float(verified_claims_ratio),
         "verified_claims": verified_claims_count,
         "total_claims": num_claims,
         "claims": results,
