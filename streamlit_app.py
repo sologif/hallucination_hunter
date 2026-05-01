@@ -423,7 +423,7 @@ st.markdown("""
 if not st.session_state['logged_in']:
     # Login Page Layout
     st.markdown('<div class="main-title" style="margin-top:5rem;">Hallucination <span>Hunter</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="login-header" style="margin-top:2rem;"><h2>Welcome Back</h2><p>Sign in to access Enterprise-grade AI verification.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-header" style="margin-top:2rem;"><h2>Enterprise Access</h2><p>Sign in with Google or continue as Guest.</p></div>', unsafe_allow_html=True)
     
     # Simplified Login Options
     col_google, col_guest = st.columns(2)
@@ -461,11 +461,11 @@ else:
         else:
             st.info("🧠 Model: Using Base NLI Engine")
             
-        st.write("Automatically load benchmark samples to test the model.")
+        st.markdown("Automatically load industry-standard benchmark samples to test detection accuracy.")
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🎲 Load Random Hallucinated Sample"):
+            if st.button("🎲 Load HaluEval Hallucination", help="Randomly load a sample from HaluEval that contains a factual error (hallucination).", key="sidebar_hallucinated"):
                 # Clear previous sample first
                 st.session_state.pop("verify_input", None)
                 st.session_state.pop("hidden_ground_truth", None)
@@ -490,7 +490,7 @@ else:
                     st.error(f"Error loading sample: {e}")
         
         with col2:
-            if st.button("✅ Load Random Faithful Sample"):
+            if st.button("✅ Load HaluEval Faithful", help="Randomly load a sample from HaluEval that is factually grounded and faithful.", key="sidebar_faithful"):
                 # Clear previous sample first
                 st.session_state.pop("verify_input", None)
                 st.session_state.pop("hidden_ground_truth", None)
@@ -514,6 +514,7 @@ else:
                 except Exception as e:
                     st.error(f"Error loading sample: {e}")
         
+        st.caption("Using HaluEval (200+ samples).")
         st.markdown("---")
         if st.button("🚪 Log out"):
             st.session_state['logged_in'] = False
@@ -669,7 +670,7 @@ else:
         
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            if st.button("🎲 Load Random Hallucinated Sample", key="tab_hallucinated_loader"):
+            if st.button("🎲 Load HaluEval Hallucination", help="Randomly load a sample from HaluEval that contains a factual error.", key="tab_hallucinated_loader"):
                 # Clear previous sample first
                 st.session_state.pop("verify_input", None)
                 st.session_state.pop("hidden_ground_truth", None)
@@ -694,7 +695,7 @@ else:
                     st.error(f"Error loading sample: {e}")
         
         with col_t2:
-            if st.button("✅ Load Random Faithful Sample", key="tab_faithful_loader"):
+            if st.button("✅ Load HaluEval Faithful", help="Randomly load a sample from HaluEval that is factually grounded.", key="tab_faithful_loader"):
                 # Clear previous sample first
                 st.session_state.pop("verify_input", None)
                 st.session_state.pop("hidden_ground_truth", None)
