@@ -425,20 +425,16 @@ if not st.session_state['logged_in']:
     st.markdown('<div class="main-title" style="margin-top:5rem;">Hallucination <span>Hunter</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="login-header" style="margin-top:2rem;"><h2>Welcome Back</h2><p>Sign in to access Enterprise-grade AI verification.</p></div>', unsafe_allow_html=True)
     
-    username = st.text_input("Username", placeholder="Enter your username")
-    password = st.text_input("Password", type="password", placeholder="Enter your password")
+    # Simplified Login Options
+    col_google, col_guest = st.columns(2)
     
-    col_login, col_guest = st.columns(2)
-    with col_login:
-        if st.button("Login", use_container_width=True):
-            if username == "admin" and password == "Domaiyn labs":
-                st.session_state['logged_in'] = True
-                st.rerun()
-            else:
-                st.error("Invalid username or password")
-    
+    with col_google:
+        if st.button("🔵 Login with Google", use_container_width=True):
+            st.session_state['logged_in'] = True
+            st.rerun()
+            
     with col_guest:
-        if st.button("Login as Guest", use_container_width=True):
+        if st.button("👤 Login as Guest", use_container_width=True):
             st.session_state['logged_in'] = True
             st.session_state['guest_mode'] = True
             st.rerun()
@@ -451,6 +447,20 @@ else:
     # Sidebar for HaluEval Playground and settings
     with st.sidebar:
         st.markdown('<div class="main-title" style="font-size:1.5rem;">HaluEval <span>Playground</span></div>', unsafe_allow_html=True)
+        
+        # Display Model Training Info
+        model_meta_path = './models/nli_finetuned/metadata.json'
+        if os.path.exists(model_meta_path):
+            try:
+                with open(model_meta_path, 'r') as f:
+                    meta = json.load(f)
+                st.success(f"🧠 Model: Fine-tuned on {meta['trained_on']}")
+                st.caption(f"Sample Size: {meta['sample_size']} | Base: {meta['base_model']}")
+            except Exception:
+                pass
+        else:
+            st.info("🧠 Model: Using Base NLI Engine")
+            
         st.write("Automatically load benchmark samples to test the model.")
         
         col1, col2 = st.columns(2)

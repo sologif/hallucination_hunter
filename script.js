@@ -13,29 +13,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Login Elements
     const loginSection = document.getElementById('loginSection');
     const appContainer = document.getElementById('appContainer');
-    const loginBtn = document.getElementById('loginBtn');
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
     const guestLoginBtn = document.getElementById('guestLoginBtn');
-    const usernameInput = document.getElementById('username');
-    const passwordInput = document.getElementById('password');
-    const loginError = document.getElementById('loginError');
 
-    const handleLoginSuccess = () => {
+    const handleLoginSuccess = async () => {
         loginSection.classList.add('hidden');
         appContainer.classList.remove('hidden');
         // Trigger entrance animation for header
         appContainer.querySelector('header').style.animation = 'slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
+        
+        // Fetch model info
+        try {
+            const res = await fetch('/api/model-info');
+            const data = await res.json();
+            const badge = document.getElementById('modelBadge');
+            if (data.sample_size > 0) {
+                badge.textContent = `Fine-tuned on ${data.trained_on}`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.textContent = "Base NLI Engine";
+                badge.classList.remove('hidden');
+                badge.style.opacity = "0.5";
+            }
+        } catch (e) {
+            console.error("Failed to fetch model info", e);
+        }
     };
 
-    loginBtn.addEventListener('click', () => {
-        const username = usernameInput.value;
-        const password = passwordInput.value;
-
-        if (username === 'admin' && password === 'Domaiyn labs') {
-            handleLoginSuccess();
-        } else {
-            loginError.classList.remove('hidden');
-            setTimeout(() => loginError.classList.add('hidden'), 3000);
-        }
+    googleLoginBtn.addEventListener('click', () => {
+        handleLoginSuccess();
     });
 
     guestLoginBtn.addEventListener('click', () => {

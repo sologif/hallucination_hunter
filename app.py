@@ -16,6 +16,15 @@ class AnalyzeRequest(BaseModel):
 class AskRequest(BaseModel):
     query: str
 
+@app.get("/api/model-info")
+def model_info():
+    meta_path = "./models/nli_finetuned/metadata.json"
+    if os.path.exists(meta_path):
+        import json
+        with open(meta_path, "r") as f:
+            return json.load(f)
+    return {"trained_on": "Base NLI Engine", "sample_size": 0, "base_model": "cross-encoder/nli-deberta-v3-small"}
+
 @app.post("/api/analyze")
 def analyze(req: AnalyzeRequest):
     result = analyze_hallucination(req.source_text, req.generated_text)

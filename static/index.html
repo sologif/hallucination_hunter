@@ -20,16 +20,11 @@
                 <h1>Hallucination <span>Hunter</span></h1>
                 <p>Enterprise-grade AI verification. Sign in to access.</p>
             </header>
-            <div class="input-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" placeholder="Enter your username">
-            </div>
-            <div class="input-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" placeholder="Enter your password">
-            </div>
             <div class="login-actions">
-                <button id="loginBtn">Login</button>
+                <button id="googleLoginBtn" class="google-btn">
+                    <svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84a4.15 4.15 0 0 1-1.8 2.71v2.26h2.91c1.71-1.58 2.69-3.9 2.69-6.6z" fill="#4285F4"/><path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.83.85-3.05.85-2.34 0-4.32-1.58-5.03-3.7H1.02v2.32A8.99 8.99 0 0 0 9 18z" fill="#34A853"/><path d="M3.97 10.71A5.4 5.4 0 0 1 3.65 9c0-.6.1-1.19.27-1.71V4.97H1.02A8.99 8.99 0 0 0 0 9c0 1.45.35 2.82.97 4.03l3-2.32z" fill="#FBBC05"/><path d="M9 3.58c1.32 0 2.5.45 3.44 1.35L15.02 2.3A8.96 8.96 0 0 0 9 0C5.48 0 2.44 2.02 0 4.97l2.98 2.32C3.68 5.15 5.66 3.58 9 3.58z" fill="#EA4335"/></svg>
+                    Login with Google
+                </button>
                 <button id="guestLoginBtn" class="secondary-btn">Login as Guest</button>
             </div>
             <p id="loginError" class="error-text hidden">Invalid username or password</p>
@@ -38,7 +33,7 @@
 
     <div id="appContainer" class="container hidden">
         <header>
-            <h1>Hallucination <span>Hunter</span></h1>
+            <h1>Hallucination <span>Hunter</span> <span id="modelBadge" class="badge-model hidden">HaluEval Tuned</span></h1>
             <p>Enterprise-grade AI verification. Grounded against factual sources to eliminate hallucinations using Natural Language Inference.</p>
         </header>
 
