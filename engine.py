@@ -7,8 +7,13 @@ import numpy as np
 # Load models globally to avoid reloading
 nlp = en_core_web_sm.load()
 
+import os
+if os.path.isdir('./models/nli_finetuned'):
+    nli_model = CrossEncoder('./models/nli_finetuned')
+else:
+    nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
+
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
-nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
 
 # The standard mapping for cross-encoder/nli-deberta-v3-small
 # 0: Contradiction, 1: Entailment, 2: Neutral
@@ -56,13 +61,22 @@ def analyze_hallucination(source_text: str, generated_text: str):
             nli_probs = np.exp(nli_logits) / np.sum(np.exp(nli_logits))
             
             pred_label_idx = np.argmax(nli_probs)
-            pred_label = LABEL_MAPPING.get(pred_label_idx, "Unknown")
             
-            entailment_prob = nli_probs[1]
+            # Detect if we are using the fine-tuned 2-label model
+            if len(nli_probs) == 2:
+                # Fine-tuned: 0: Faithful, 1: Hallucinated
+                FINETUNED_MAPPING = {0: "Entailment", 1: "Contradiction"}
+                pred_label = FINETUNED_MAPPING.get(pred_label_idx, "Unknown")
+                entailment_prob = nli_probs[0]
+                is_hallucinated = (pred_label == "Contradiction")
+            else:
+                # Original: 0: Contradiction, 1: Entailment, 2: Neutral
+                pred_label = LABEL_MAPPING.get(pred_label_idx, "Unknown")
+                entailment_prob = nli_probs[1]
+                # Treat Neutral as hallucinated because we want strict grounding
+                is_hallucinated = pred_label in ["Contradiction", "Neutral"]
+            
             total_entailment_prob += entailment_prob
-            
-            # Treat Neutral as hallucinated because we want strict grounding
-            is_hallucinated = pred_label in ["Contradiction", "Neutral"]
             
         if is_hallucinated:
             has_hallucination = True

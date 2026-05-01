@@ -42,10 +42,14 @@ def main():
 
     print("Starting evaluation...")
     for item in tqdm(dataset, desc="Evaluating"):
-        knowledge = item.get("knowledge", "")
-        right_answer = item.get("right_answer", "")
-        hallucinated_answer = item.get("hallucinated_answer", "")
+        # Handle both QA and Summarization formats
+        knowledge = item.get("knowledge", item.get("document", ""))
+        right_answer = item.get("right_answer", item.get("right_summary", ""))
+        hallucinated_answer = item.get("hallucinated_answer", item.get("hallucinated_summary", ""))
         
+        if not knowledge:
+            continue
+            
         # 1. Test Faithful Example (Ground Truth = 0)
         if right_answer:
             res_faithful = analyze_hallucination(knowledge, right_answer)

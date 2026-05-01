@@ -546,12 +546,20 @@ else:
 
     with tab2:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.info("Directly paste an AI-generated answer here. We will evaluate the pasted text against the Vector Database.")
-        pasted_text = st.text_area("Paste text to verify against ground truth", value="The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.", height=120, key="verify_input")
+        st.info("Directly paste an AI-generated answer here. You can also provide the ground truth text to verify against.")
+        
+        custom_ground_truth = st.text_area("Custom Ground Truth (Optional)", placeholder="Paste the source text/knowledge here to verify against. If left empty, we will search the Vector Database.", height=150, key="custom_source")
+        
+        pasted_text = st.text_area("Paste text to verify", value="The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.", height=120, key="verify_input")
         
         if st.button("Verify Pasted Text"):
             with st.spinner("Validating claims..."):
-                sources = vector_db.search(pasted_text, limit=3)
-                source_passage = " ".join([s["text"] for s in sources])
+                if custom_ground_truth.strip():
+                    source_passage = custom_ground_truth
+                    sources = [{"text": custom_ground_truth}]
+                else:
+                    sources = vector_db.search(pasted_text, limit=3)
+                    source_passage = " ".join([s["text"] for s in sources])
+                
                 verification_result = analyze_hallucination(source_passage, pasted_text)
                 render_results(verification_result, pasted_text, sources)
