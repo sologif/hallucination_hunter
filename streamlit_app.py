@@ -428,12 +428,20 @@ if not st.session_state['logged_in']:
     username = st.text_input("Username", placeholder="Enter your username")
     password = st.text_input("Password", type="password", placeholder="Enter your password")
     
-    if st.button("Login"):
-        if username == "admin" and password == "Domaiyn labs":
+    col_login, col_guest = st.columns(2)
+    with col_login:
+        if st.button("Login", use_container_width=True):
+            if username == "admin" and password == "Domaiyn labs":
+                st.session_state['logged_in'] = True
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+    
+    with col_guest:
+        if st.button("Login as Guest", use_container_width=True):
             st.session_state['logged_in'] = True
+            st.session_state['guest_mode'] = True
             st.rerun()
-        else:
-            st.error("Invalid username or password")
             
 else:
     # Main Application
@@ -627,7 +635,7 @@ else:
                 </div>
                 <div class="source-match">
                     <strong>Closest Ground Truth Match</strong>
-                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.5 else 'No source supports this claim — it is likely fabricated.'}"</p>
+                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.4 else 'No source supports this claim — it is likely fabricated.'}"</p>
                 </div>
                 <div class="metrics-bar">
                     <div class="metric">
@@ -832,8 +840,11 @@ else:
                         label = item.get("label", 1) # 1 in TRUE is Entailment (Faithful)
                         
                         res = analyze_hallucination(knowledge, hypothesis)
-                        # Map labels to binary: 0=Faithful, 1=Hallucinated
+                        # TRUE format: label 1=Entailment, 0=Not
                         ground_truth = 0 if label == 1 else 1
+                        
+                        # Prediction: Only count as Hallucinated if verdict is actually HALLUCINATED
+                        # WARNING is treated as neutral/faithful in binary evaluation
                         prediction = 1 if res["verdict"] == "HALLUCINATED" else 0
                         
                         y_true.append(ground_truth)
@@ -850,12 +861,14 @@ else:
                             # Test Faithful
                             res_f = analyze_hallucination(knowledge, faithful_ans)
                             y_true.append(0) # 0 = Faithful
-                            y_pred.append(0 if res_f["verdict"] == "FAITHFUL" else 1)
-                            results_data.append({"Type": "Faithful", "Prediction": res_f["verdict"], "Correct": res_f["verdict"] == "FAITHFUL"})
+                            # Prediction: Faithful if verdict is FAITHFUL or WARNING (non-contradiction)
+                            y_pred.append(0 if res_f["verdict"] != "HALLUCINATED" else 1)
+                            results_data.append({"Type": "Faithful", "Prediction": res_f["verdict"], "Correct": res_f["verdict"] != "HALLUCINATED"})
                             
                             # Test Hallucinated
                             res_h = analyze_hallucination(knowledge, hallucinated_ans)
                             y_true.append(1) # 1 = Hallucinated
+                            # Prediction: Hallucinated only if verdict is HALLUCINATED
                             y_pred.append(1 if res_h["verdict"] == "HALLUCINATED" else 0)
                             results_data.append({"Type": "Hallucinated", "Prediction": res_h["verdict"], "Correct": res_h["verdict"] == "HALLUCINATED"})
 

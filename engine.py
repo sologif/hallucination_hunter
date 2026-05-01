@@ -41,15 +41,33 @@ def extract_claims(text: str):
     nlp, _, _ = get_models()
     try:
         doc = nlp(text)
-        junk_keywords = ["cookie", "privacy policy", "all rights reserved", "subscribe now", "sign up", "click here", "javascript", "browser"]
+        junk_keywords = [
+            "cookie", "privacy policy", "all rights reserved", "subscribe now", 
+            "sign up", "click here", "javascript", "browser", "login", "register",
+            "terms of use", "contact us", "site map", "navigation", "read more",
+            "warranty", "representation", "liability", "disclaimer", "copyright"
+        ]
         
         claims = []
         for sent in doc.sents:
             txt = sent.text.strip()
-            if len(txt) < 15:
+            # Length filter: too short or suspiciously long (often scraped junk)
+            if len(txt) < 20 or len(txt) > 500:
                 continue
-            if any(k in txt.lower() for k in junk_keywords):
+                
+            # Pattern filter: sentences starting with common UI navigation words
+            lower_txt = txt.lower()
+            if any(lower_txt.startswith(k) for k in ["home", "about", "contact", "search", "menu"]):
                 continue
+                
+            if any(k in lower_txt for k in junk_keywords):
+                continue
+                
+            # Filter out sentences that are just lists of links (low verb/noun ratio)
+            # (Simple heuristic: if it has very few spaces compared to its length)
+            if len(txt) > 50 and txt.count(' ') < len(txt) / 10:
+                continue
+                
             claims.append(txt)
             
         if not claims:
@@ -167,47 +185,70 @@ def analyze_hallucination(source_text: str, generated_text: str):
                 "is_hallucinated": is_hallucinated
             }
 
-    # 4. Aggregate by claim
-    contradiction_count = 0
-    neutral_count = 0
-    entailment_count = 0
-    unsupported_count = 0
+    # 4. Aggregate by claim and build alignment matrix
+    alignment_matrix = []
     
     for i, claim in enumerate(generated_claims):
+        claim_row = []
         best_res = None
         highest_entailment = -1.0
         
-        for pair_idx in claim_to_pair_indices[i]:
-            source_idx, sim = pair_metadata[pair_idx]
-            nli_res = pair_results[pair_idx]
+        # Build the full row for this claim against ALL source sentences
+        for j, src_sent in enumerate(source_sentences):
+            # Find the pair index in nli_pairs
+            pair_idx = -1
+            for p_idx in claim_to_pair_indices[i]:
+                if pair_metadata[p_idx][0] == j:
+                    pair_idx = p_idx
+                    break
             
-            if nli_res is None:
-                current_res = {
-                    "claim": claim,
-                    "best_source_sentence": source_sentences[source_idx],
-                    "similarity_score": float(round(float(sim), 3)),
-                    "nli_label": "Unsupported",
-                    "entailment_prob": 0.0,
-                    "is_hallucinated": True
+            if pair_idx != -1 and pair_results[pair_idx] is not None:
+                nli_res = pair_results[pair_idx]
+                cell_data = {
+                    "label": nli_res["label"],
+                    "prob": float(round(float(nli_res["prob"]), 3)),
+                    "is_hallucinated": nli_res["is_hallucinated"]
                 }
             else:
+                # If not in top-K or no NLI result, treat as Neutral/Unsupported
+                # (We still want a score for the heatmap)
+                cell_data = {
+                    "label": "Neutral",
+                    "prob": 0.0,
+                    "is_hallucinated": False
+                }
+            claim_row.append(cell_data)
+
+            # Logic for selecting the "Best Source" (Highest Entailment)
+            if pair_idx != -1 and pair_results[pair_idx] is not None:
                 current_res = {
                     "claim": claim,
-                    "best_source_sentence": source_sentences[source_idx],
-                    "similarity_score": float(round(float(sim), 3)),
+                    "best_source_sentence": source_sentences[j],
+                    "similarity_score": float(round(float(cosine_scores[i][j]), 3)),
                     "nli_label": nli_res["label"],
                     "entailment_prob": float(round(float(nli_res["prob"]), 3)),
                     "is_hallucinated": nli_res["is_hallucinated"]
                 }
-            
-            # Prioritize Entailment
-            if not current_res["is_hallucinated"] and current_res["nli_label"] == "Entailment":
-                if current_res["entailment_prob"] > highest_entailment:
-                    highest_entailment = current_res["entailment_prob"]
+                
+                if current_res["nli_label"] == "Entailment":
+                    if current_res["entailment_prob"] > highest_entailment:
+                        highest_entailment = current_res["entailment_prob"]
+                        best_res = current_res
+                elif best_res is None or (best_res["is_hallucinated"] and not current_res["is_hallucinated"]):
                     best_res = current_res
-            elif best_res is None or (best_res["is_hallucinated"] and not current_res["is_hallucinated"]):
-                best_res = current_res
         
+        # Fallback if no good match found in top-K
+        if best_res is None:
+            best_idx = np.argmax(cosine_scores[i])
+            best_res = {
+                "claim": claim,
+                "best_source_sentence": source_sentences[best_idx],
+                "similarity_score": float(round(float(cosine_scores[i][best_idx]), 3)),
+                "nli_label": "Unsupported",
+                "entailment_prob": 0.0,
+                "is_hallucinated": True
+            }
+            
         if best_res["nli_label"] == "Entailment":
             entailment_count += 1
         elif best_res["nli_label"] == "Contradiction":
@@ -218,20 +259,14 @@ def analyze_hallucination(source_text: str, generated_text: str):
             neutral_count += 1
             
         results.append(best_res)
+        alignment_matrix.append(claim_row)
 
     gc.collect()
     
     # 5. Nuanced Verdict Logic
-    # HALLUCINATED: Hard contradictions found (> 10% of claims)
-    # WARNING: No contradictions, but many unsupported/neutral claims (> 30%)
-    # FAITHFUL: Mostly entailed claims.
-    
-    contradiction_rate = contradiction_count / num_claims
-    unverified_rate = (neutral_count + unsupported_count) / num_claims
-    
-    if contradiction_rate > 0.15:
+    if contradiction_count > 0:
         overall_verdict = "HALLUCINATED"
-    elif unverified_rate > 0.4:
+    elif neutral_count > 0 or unsupported_count > 0:
         overall_verdict = "WARNING"
     else:
         overall_verdict = "FAITHFUL"
@@ -245,5 +280,7 @@ def analyze_hallucination(source_text: str, generated_text: str):
         "total_claims": num_claims,
         "claims": results,
         "source_sentences": source_sentences,
-        "generated_claims": generated_claims
+        "generated_claims": generated_claims,
+        "alignment_matrix": alignment_matrix
     }
+
