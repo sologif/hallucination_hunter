@@ -613,6 +613,22 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("Directly paste an AI-generated answer here. You can also provide the ground truth text to verify against.")
         
+        # New: Direct button for those who can't see the sidebar
+        if st.button("🎲 Load Random HaluEval Sample", key="tab_sample_loader"):
+            try:
+                import random
+                with open("data/HaluEval/data/summarization_data.json", "r") as f:
+                    lines = f.readlines()
+                    line = random.choice(lines)
+                    sample = json.loads(line)
+                if sample:
+                    st.session_state.pasted_text = sample["hallucinated_summary"]
+                    st.session_state.hidden_ground_truth = sample["document"]
+                    st.success("Loaded HaluEval Sample!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error loading sample: {e}")
+
         # Handle inputs from session state (HaluEval Sample)
         initial_text = st.session_state.get("pasted_text", "The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.")
         pasted_text = st.text_area("Paste text to verify", value=initial_text, height=150, key="verify_input")
