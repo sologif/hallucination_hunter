@@ -600,9 +600,17 @@ else:
             y_labels = [f"Claim {i+1}" for i in range(len(verification_result["generated_claims"]))]
             x_labels = [f"Source {j+1}" for j in range(len(verification_result["source_sentences"]))]
             
-            # Limit labels to avoid clutter
-            y_hover = [c[:100] + "..." if len(c) > 100 else c for c in verification_result["generated_claims"]]
-            x_hover = [s[:100] + "..." if len(s) > 100 else s for s in verification_result["source_sentences"]]
+            import numpy as np
+            # Prepare hover data
+            claims_text = verification_result["generated_claims"]
+            sources_text = verification_result["source_sentences"]
+            
+            hover_text = []
+            for i, claim in enumerate(claims_text):
+                row = []
+                for j, source in enumerate(sources_text):
+                    row.append(f"Claim: {claim[:100]}...<br>Source: {source[:100]}...<br>Similarity: {scores[i][j]:.3f}")
+                hover_text.append(row)
 
             fig_heat = px.imshow(
                 scores,
@@ -610,18 +618,29 @@ else:
                 x=x_labels,
                 y=y_labels,
                 color_continuous_scale="Magma",
-                aspect="auto"
+                aspect="auto",
+                title="Semantic Alignment Matrix"
             )
             
             fig_heat.update_traces(
-                hovertemplate="Claim: %{y}<br>Source: %{x}<br>Similarity: %{z:.3f}<extra></extra>"
+                hovertemplate="%{customdata}<extra></extra>",
+                customdata=hover_text
             )
             
             fig_heat.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 font_color="white",
-                margin=dict(l=20, r=20, t=20, b=20)
+                title_font_family="Outfit",
+                title_font_size=24,
+                margin=dict(l=20, r=20, t=60, b=20),
+                coloraxis_colorbar=dict(
+                    title="Similarity",
+                    thicknessmode="pixels", thickness=15,
+                    lenmode="fraction", len=0.8,
+                    yanchor="top", y=1,
+                    ticks="outside"
+                )
             )
             
             st.plotly_chart(fig_heat, use_container_width=True)
