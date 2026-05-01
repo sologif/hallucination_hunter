@@ -9,6 +9,7 @@ import json
 import pandas as pd
 import plotly.express as px
 from datasets import load_dataset
+import numpy as np
 
 # Optimization: Cache models and resources to stay within Streamlit Cloud memory limits
 @st.cache_resource
@@ -485,13 +486,20 @@ else:
         # Overall Verdict
         verdict_class = "faithful" if verdict == "FAITHFUL" else "hallucinated"
         
+        # Re-frame confidence score: If hallucinated, show risk.
+        display_score = score
+        score_label = "Verified"
+        if verdict == "HALLUCINATED":
+            display_score = 100 - score
+            score_label = "Hallucination Risk"
+
         st.markdown(f"""
         <div class="verdict-card {verdict_class}">
             <div class="verdict-title verdict-{verdict_class}">{verdict}</div>
             <div class="score-container">
                 <span class="score">{verification_result.get('verified_claims', 0)}/{verification_result.get('total_claims', 0)}</span> claims supported
             </div>
-            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">{score:.1f}% Verified</div>
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">{display_score:.1f}% {score_label}</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -600,7 +608,7 @@ else:
             y_labels = [f"Claim {i+1}" for i in range(len(verification_result["generated_claims"]))]
             x_labels = [f"Source {j+1}" for j in range(len(verification_result["source_sentences"]))]
             
-            import numpy as np
+            scores = verification_result["cosine_scores"]
             # Prepare hover data
             claims_text = verification_result["generated_claims"]
             sources_text = verification_result["source_sentences"]
@@ -764,6 +772,7 @@ else:
         st.markdown('<div class="analysis-title">HaluEval Benchmarking Dashboard</div>', unsafe_allow_html=True)
         st.write("Evaluate the engine's performance against the industry-standard HaluEval dataset.")
         
+        col_a, col_b = st.columns(2)
         with col_a:
             dataset_option = st.selectbox("Select Benchmark Dataset", 
                                         ["Summarization (HaluEval)", "QA (HaluEval)", "Dialogue (HaluEval)", "TRUE Benchmark (google-research/true)"], 
