@@ -412,15 +412,15 @@ if not st.session_state['logged_in']:
     st.markdown('<div class="main-title" style="margin-top:5rem;">Hallucination <span>Hunter</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="login-header" style="margin-top:2rem;"><h2>Welcome Back</h2><p>Sign in to access Enterprise-grade AI verification.</p></div>', unsafe_allow_html=True)
     
-    username = st.text_input("Username", placeholder="Enter your username (any)")
-    password = st.text_input("Password", type="password", placeholder="Enter your password (any)")
+    username = st.text_input("Username", placeholder="Enter your username")
+    password = st.text_input("Password", type="password", placeholder="Enter your password")
     
     if st.button("Login"):
-        if username and password:
+        if username == "admin" and password == "Domaiyn labs":
             st.session_state['logged_in'] = True
             st.rerun()
         else:
-            st.error("Please enter both username and password")
+            st.error("Invalid username or password")
             
 else:
     # Main Application
