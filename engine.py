@@ -40,7 +40,17 @@ def extract_claims(text: str):
     nlp, _, _ = get_models()
     try:
         doc = nlp(text)
-        claims = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 3]
+        junk_keywords = ["cookie", "privacy policy", "all rights reserved", "subscribe now", "sign up", "click here", "javascript", "browser"]
+        
+        claims = []
+        for sent in doc.sents:
+            txt = sent.text.strip()
+            if len(txt) < 15:
+                continue
+            if any(k in txt.lower() for k in junk_keywords):
+                continue
+            claims.append(txt)
+            
         if not claims:
             claims = [line.strip() for line in text.split('\n') if len(line.strip()) > 5]
         return claims
@@ -64,19 +74,17 @@ def analyze_hallucination(source_text: str, generated_text: str):
     cosine_scores = np.dot(claim_embeddings, source_embeddings.T)
     
     results = []
-    verified_claims_count = 0
     num_claims = len(generated_claims)
     
     SIMILARITY_THRESHOLD = 0.25
     TOP_K = min(3, len(source_sentences))
     
     nli_pairs = []
-    claim_to_pair_indices = [] # list of lists: claim_idx -> [pair_indices]
-    pair_metadata = [] # list of (source_idx, similarity)
+    claim_to_pair_indices = []
+    pair_metadata = []
     
     for i, claim in enumerate(generated_claims):
         top_indices = np.argsort(cosine_scores[i])[-TOP_K:][::-1]
-        
         current_claim_pairs = []
         has_relevant_source = False
         for idx in top_indices:
@@ -88,11 +96,9 @@ def analyze_hallucination(source_text: str, generated_text: str):
                 has_relevant_source = True
         
         if not has_relevant_source:
-            # Fallback to the single best match if none pass the threshold (to show "Unsupported")
             current_claim_pairs.append(len(nli_pairs))
-            nli_pairs.append(None) # Sentinel for Unsupported
+            nli_pairs.append(None)
             pair_metadata.append((top_indices[0], cosine_scores[i][top_indices[0]]))
-            
         claim_to_pair_indices.append(current_claim_pairs)
 
     # 3. Batched NLI Prediction
@@ -124,6 +130,11 @@ def analyze_hallucination(source_text: str, generated_text: str):
             }
 
     # 4. Aggregate by claim
+    contradiction_count = 0
+    neutral_count = 0
+    entailment_count = 0
+    unsupported_count = 0
+    
     for i, claim in enumerate(generated_claims):
         best_res = None
         highest_entailment = -1.0
@@ -133,7 +144,6 @@ def analyze_hallucination(source_text: str, generated_text: str):
             nli_res = pair_results[pair_idx]
             
             if nli_res is None:
-                # Unsupported case
                 current_res = {
                     "claim": claim,
                     "best_source_sentence": source_sentences[source_idx],
@@ -158,23 +168,42 @@ def analyze_hallucination(source_text: str, generated_text: str):
                     highest_entailment = current_res["entailment_prob"]
                     best_res = current_res
             elif best_res is None or (best_res["is_hallucinated"] and not current_res["is_hallucinated"]):
-                # If we haven't found an entailment yet, but found a neutral (treated as faithful here if logic allows)
-                # Or just take the first result as a baseline
                 best_res = current_res
         
-        if not best_res["is_hallucinated"]:
-            verified_claims_count += 1
+        if best_res["nli_label"] == "Entailment":
+            entailment_count += 1
+        elif best_res["nli_label"] == "Contradiction":
+            contradiction_count += 1
+        elif best_res["nli_label"] == "Unsupported":
+            unsupported_count += 1
+        else:
+            neutral_count += 1
+            
         results.append(best_res)
 
     gc.collect()
-    verified_claims_ratio = round((verified_claims_count / num_claims) * 100, 2)
-    hallucination_rate = (num_claims - verified_claims_count) / num_claims
-    overall_verdict = "HALLUCINATED" if hallucination_rate > 0.3 else "FAITHFUL"
+    
+    # 5. Nuanced Verdict Logic
+    # HALLUCINATED: Hard contradictions found (> 10% of claims)
+    # WARNING: No contradictions, but many unsupported/neutral claims (> 30%)
+    # FAITHFUL: Mostly entailed claims.
+    
+    contradiction_rate = contradiction_count / num_claims
+    unverified_rate = (neutral_count + unsupported_count) / num_claims
+    
+    if contradiction_rate > 0.1:
+        overall_verdict = "HALLUCINATED"
+    elif unverified_rate > 0.3:
+        overall_verdict = "WARNING"
+    else:
+        overall_verdict = "FAITHFUL"
+        
+    verified_claims_ratio = round((entailment_count / num_claims) * 100, 2)
     
     return {
         "verdict": overall_verdict,
         "confidence_score": float(verified_claims_ratio),
-        "verified_claims": verified_claims_count,
+        "verified_claims": entailment_count,
         "total_claims": num_claims,
         "claims": results,
         "source_sentences": source_sentences,

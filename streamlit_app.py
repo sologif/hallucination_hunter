@@ -206,6 +206,7 @@ st.markdown("""
     }
     .verdict-card.faithful::before { background: var(--success); }
     .verdict-card.hallucinated::before { background: var(--danger); }
+    .verdict-card.warning::before { background: var(--warning); }
     
     .verdict-title {
         font-family: 'Outfit', sans-serif;
@@ -217,6 +218,7 @@ st.markdown("""
     }
     .verdict-faithful { color: var(--success); text-shadow: 0 0 30px rgba(16, 185, 129, 0.4); }
     .verdict-hallucinated { color: var(--danger); text-shadow: 0 0 30px rgba(239, 68, 68, 0.4); }
+    .verdict-warning { color: var(--warning); text-shadow: 0 0 30px rgba(245, 158, 11, 0.4); }
     
     .score-container {
         font-size: 1.25rem;
@@ -485,7 +487,12 @@ else:
             return
 
         # Overall Verdict
-        verdict_class = "faithful" if verdict == "FAITHFUL" else "hallucinated"
+        if verdict == "FAITHFUL":
+            verdict_class = "faithful"
+        elif verdict == "WARNING":
+            verdict_class = "warning"
+        else:
+            verdict_class = "hallucinated"
         
         # Re-frame confidence score: If hallucinated, show risk.
         display_score = score
@@ -558,32 +565,36 @@ else:
         claims_html = ""
         for claim in verification_result["claims"]:
             nli_label = claim["nli_label"]
+            similarity = claim["similarity_score"]
             
             if nli_label == "Entailment":
                 status_class = "faithful"
                 badge_class = "badge-faithful"
+                badge_text = "Verified"
             elif nli_label == "Contradiction":
                 status_class = "hallucinated"
                 badge_class = "badge-hallucinated"
+                badge_text = "Hallucinated"
             elif nli_label == "Unsupported":
                 status_class = "unsupported"
                 badge_class = "badge-unsupported"
+                badge_text = "Unsupported"
             else:
                 status_class = "neutral"
                 badge_class = "badge-neutral"
+                badge_text = "Unverified"
                 
             entailment_prob = claim["entailment_prob"] * 100
-            similarity = claim["similarity_score"]
             
             claims_html += f"""
             <div class="claim-card {status_class}">
                 <div class="claim-header">
                     <div class="claim-text">"{html.escape(claim['claim'])}"</div>
-                    <div class="badge {badge_class}">{nli_label}</div>
+                    <div class="badge {badge_class}">{badge_text}</div>
                 </div>
                 <div class="source-match">
                     <strong>Closest Ground Truth Match</strong>
-                    <p>"{html.escape(claim['best_source_sentence'])}"</p>
+                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.2 else 'No direct semantic match found in the provided sources.'}"</p>
                 </div>
                 <div class="metrics-bar">
                     <div class="metric">
