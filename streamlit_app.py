@@ -477,7 +477,14 @@ else:
         """, unsafe_allow_html=True)
         
         # Sources Card
-        sources_html = "".join([f'<li class="source-item"><strong>Source {i+1}:</strong><br>{html.escape(s["text"])}</li>' for i, s in enumerate(sources_list)])
+        sources_html = ""
+        for i, s in enumerate(sources_list):
+            title = s.get("title", f"Source {i+1}")
+            url = s.get("url", "")
+            text = s.get("text", "")
+            
+            link_html = f'<a href="{url}" target="_blank" style="color:var(--accent-primary); text-decoration:none; font-size:0.8rem; margin-left:10px;">[Visit Source]</a>' if url else ""
+            sources_html += f'<li class="source-item"><strong>{html.escape(title)}:</strong>{link_html}<br>{html.escape(text)}</li>'
         if not sources_html:
             sources_html = '<li class="source-item">No relevant sources found in the database.</li>'
             
@@ -549,7 +556,7 @@ else:
         if st.button("Generate & Analyze"):
             with st.spinner("Hunting for Hallucinations..."):
                 if use_web:
-                    sources = search_web(query, limit=3)
+                    sources = search_web(query, limit=5)
                 else:
                     sources = vector_db.search(query, limit=3)
                     
@@ -578,7 +585,7 @@ else:
                     source_passage = custom_ground_truth
                     sources = [{"text": custom_ground_truth}]
                 elif use_web_verify:
-                    sources = search_web(pasted_text, limit=3)
+                    sources = search_web(pasted_text, limit=5)
                     source_passage = " ".join([s["text"] for s in sources])
                 else:
                     sources = vector_db.search(pasted_text, limit=3)
