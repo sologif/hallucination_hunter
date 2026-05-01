@@ -28,7 +28,7 @@ def analyze_hallucination(source_text: str, generated_text: str):
     generated_claims = extract_claims(generated_text)
     
     if not source_sentences or not generated_claims:
-        return {"verdict": "ERROR", "score": 0.0, "details": "Empty source or generated text."}
+        return {"verdict": "ERROR", "confidence_score": 0.0, "details": "Empty source or generated text.", "claims": []}
     
     # 1. Embed source sentences and claims
     source_embeddings = embedder.encode(source_sentences, convert_to_tensor=True)

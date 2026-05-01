@@ -436,8 +436,12 @@ else:
 
     def render_results(verification_result, answer_text, sources_list):
         verdict = verification_result["verdict"]
-        score = verification_result["confidence_score"]
+        score = verification_result.get("confidence_score", 0.0)
         
+        if verdict == "ERROR":
+            st.error(f"Analysis Error: {verification_result.get('details', 'Unknown error')}")
+            return
+
         # Overall Verdict
         verdict_class = "faithful" if verdict == "FAITHFUL" else "hallucinated"
         
