@@ -625,7 +625,7 @@ else:
             
             try:
                 status_text.text(f"Loading {dataset_option} dataset from Hugging Face...")
-                dataset = load_dataset("pminervini/HaluEval", m["subset"], split="train", streaming=True)
+                dataset = load_dataset("pminervini/HaluEval", m["subset"], split="data", streaming=True)
                 # Take only the requested sample count
                 data = []
                 for i, entry in enumerate(dataset):
