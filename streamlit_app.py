@@ -675,7 +675,7 @@ else:
                     
                     # Auto-fallback or manual web search
                     max_local_score = max([r["score"] for r in local_results]) if local_results else 0
-                    should_use_web = use_web_verify or (max_local_score < 0.55)
+                    should_use_web = use_web_verify or (max_local_score < 1.0)
                     
                     if should_use_web:
                         st.write("🔍 Searching live web for grounded evidence...")
