@@ -4,6 +4,7 @@ from fastembed import TextEmbedding
 import torch
 import numpy as np
 import gc
+import re
 
 # Global model holders
 _nlp = None
@@ -57,6 +58,26 @@ def extract_claims(text: str):
     except Exception:
         return [line.strip() for line in text.split('\n') if len(line.strip()) > 5]
 
+def get_keyword_overlap(text1: str, text2: str):
+    """
+    Calculate keyword overlap between two texts.
+    Returns a score between 0 and 1.
+    """
+    def tokenize(text):
+        # Lowercase, remove non-alphanumeric, split, and filter short words
+        words = re.findall(r'\w+', text.lower())
+        return set(w for w in words if len(w) > 2)
+    
+    words1 = tokenize(text1)
+    words2 = tokenize(text2)
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1.intersection(words2)
+    # Jaccard-like similarity but biased towards the smaller set (query/claim)
+    return len(intersection) / len(words1) if words1 else 0.0
+
 def analyze_hallucination(source_text: str, generated_text: str):
     nlp, nli_model, embedder = get_models()
     source_sentences = extract_claims(source_text)
@@ -84,21 +105,38 @@ def analyze_hallucination(source_text: str, generated_text: str):
     pair_metadata = []
     
     for i, claim in enumerate(generated_claims):
-        top_indices = np.argsort(cosine_scores[i])[-TOP_K:][::-1]
+        # Combine semantic similarity with keyword overlap
+        combined_scores = []
+        for idx, src_sent in enumerate(source_sentences):
+            sem_sim = cosine_scores[i][idx]
+            key_overlap = get_keyword_overlap(claim, src_sent)
+            # Weighted score: Semantic is great for meaning, but keyword is a hard requirement for factual grounding
+            # If keyword overlap is 0, we penalize the semantic score significantly
+            hybrid_score = (sem_sim * 0.7) + (key_overlap * 0.3)
+            if key_overlap == 0:
+                hybrid_score *= 0.5
+            combined_scores.append(hybrid_score)
+        
+        combined_scores = np.array(combined_scores)
+        top_indices = np.argsort(combined_scores)[-TOP_K:][::-1]
+        
         current_claim_pairs = []
         has_relevant_source = False
         for idx in top_indices:
-            similarity = cosine_scores[i][idx]
-            if similarity >= SIMILARITY_THRESHOLD:
+            score = combined_scores[idx]
+            # Use a slightly more relaxed threshold for hybrid score but still strict
+            if score >= 0.25: 
                 current_claim_pairs.append(len(nli_pairs))
                 nli_pairs.append((source_sentences[idx], claim))
-                pair_metadata.append((idx, similarity))
+                pair_metadata.append((idx, float(cosine_scores[i][idx]))) # Still store raw cosine for UI
                 has_relevant_source = True
         
         if not has_relevant_source:
             current_claim_pairs.append(len(nli_pairs))
             nli_pairs.append(None)
-            pair_metadata.append((top_indices[0], cosine_scores[i][top_indices[0]]))
+            # Store the best semantic match for the "Unsupported" case
+            best_sem_idx = np.argmax(cosine_scores[i])
+            pair_metadata.append((best_sem_idx, float(cosine_scores[i][best_sem_idx])))
         claim_to_pair_indices.append(current_claim_pairs)
 
     # 3. Batched NLI Prediction

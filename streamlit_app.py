@@ -599,7 +599,7 @@ else:
                 </div>
                 <div class="source-match">
                     <strong>Closest Ground Truth Match</strong>
-                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.2 else 'No direct semantic match found in the provided sources.'}"</p>
+                    <p>"{html.escape(claim['best_source_sentence']) if similarity >= 0.35 else 'No direct semantic match found in the provided sources.'}"</p>
                 </div>
                 <div class="metrics-bar">
                     <div class="metric">
