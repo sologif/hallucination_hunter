@@ -664,16 +664,31 @@ else:
                     source_passage = custom_ground_truth
                     sources = [{"title": "Manual Source", "text": custom_ground_truth, "url": "#", "source": "manual"}]
                 elif use_web_verify:
-                    # Truncate query for better search engine results
+                    # Multi-stage search fallback
                     search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
                     sources = search_web(search_query, limit=5)
+                    
+                    # Fallback 1: Try even shorter query if empty
+                    if not sources and len(search_query) > 60:
+                        short_query = search_query[:60]
+                        sources = search_web(short_query, limit=5)
+                    
+                    # Fallback 2: Try first 3 words (likely the subject)
+                    if not sources:
+                        words = search_query.split()[:3]
+                        if words:
+                            sources = search_web(" ".join(words), limit=3)
+
                     source_passage = " ".join([s["text"] for s in sources])
                 else:
                     sources = db_instance.search(pasted_text, limit=3)
                     source_passage = " ".join([s["text"] for s in sources])
                 
                 verification_result = analyze_hallucination(source_passage, pasted_text)
-                render_results(verification_result, pasted_text, sources)
+                if not sources and use_web_verify:
+                    st.error("🕵️ No web sources found for this claim. Try simplifying the text or providing a manual Ground Truth.")
+                else:
+                    render_results(verification_result, pasted_text, sources)
 
     with tab3:
         st.markdown("<br>", unsafe_allow_html=True)
