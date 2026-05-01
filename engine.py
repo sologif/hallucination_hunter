@@ -30,8 +30,16 @@ LABEL_MAPPING = {0: "Contradiction", 1: "Entailment", 2: "Neutral"}
 
 def extract_claims(text: str):
     nlp, _, _ = get_models()
-    doc = nlp(text)
-    return [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 3]
+    try:
+        doc = nlp(text)
+        claims = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 3]
+        if not claims:
+            # Fallback to simple line split if SpaCy finds no sentences
+            claims = [line.strip() for line in text.split('\n') if len(line.strip()) > 5]
+        return claims
+    except Exception as e:
+        # Emergency fallback for unexpected SpaCy errors
+        return [line.strip() for line in text.split('\n') if len(line.strip()) > 5]
 
 def analyze_hallucination(source_text: str, generated_text: str):
     nlp, nli_model, embedder = get_models()
