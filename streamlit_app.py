@@ -669,23 +669,28 @@ else:
                     source_passage = custom_ground_truth
                     sources = [{"title": "Manual Source", "text": custom_ground_truth, "url": "#", "source": "manual"}]
                 else:
-                    # Perform Local DB Search
+                    # Perform Local DB Search — only keep results above a relevance threshold
+                    # A score below 0.6 means the local DB has nothing relevant to this claim
+                    LOCAL_SCORE_THRESHOLD = 0.60
                     local_results = db_instance.search(pasted_text, limit=3)
-                    local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
+                    relevant_local = [r for r in local_results if r["score"] >= LOCAL_SCORE_THRESHOLD]
+                    local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in relevant_local]
                     
-                    # Auto-fallback or manual web search
                     max_local_score = max([r["score"] for r in local_results]) if local_results else 0
-                    should_use_web = use_web_verify or (max_local_score < 1.0)
+                    # If web search is toggled on, OR local DB has no relevant match → go to the web
+                    should_use_web = use_web_verify or (max_local_score < LOCAL_SCORE_THRESHOLD)
                     
                     if should_use_web:
                         st.write("🔍 Searching live web for grounded evidence...")
-                        search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
+                        # Always use the original claim text as search query — never pollute with local snippets
+                        search_query = pasted_text[:200] if len(pasted_text) > 200 else pasted_text
                         web_sources = search_web(search_query, limit=5)
                         
-                        # Fallback for Web: Try even shorter query if empty
-                        if not web_sources and len(search_query) > 60:
-                            web_sources = search_web(search_query[:60], limit=5)
+                        # Fallback: try a shorter version of the claim if initial search yields nothing
+                        if not web_sources and len(search_query) > 80:
+                            web_sources = search_web(search_query[:80], limit=5)
                         
+                        # Relevant local results first, then web — irrelevant local results are excluded
                         sources = local_sources + web_sources
                     else:
                         sources = local_sources
