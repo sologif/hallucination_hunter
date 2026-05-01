@@ -631,7 +631,7 @@ else:
                 
                 # Check if we need to fallback to web (low local similarity or forced by user)
                 max_local_score = max([r["score"] for r in local_results]) if local_results else 0
-                should_use_web = use_web or (max_local_score < 0.45)
+                should_use_web = use_web or (max_local_score < 0.55)
                 
                 if should_use_web:
                     if not use_web:
@@ -709,7 +709,7 @@ else:
                     
                     # Auto-fallback or manual web search
                     max_local_score = max([r["score"] for r in local_results]) if local_results else 0
-                    should_use_web = use_web_verify or (max_local_score < 0.45)
+                    should_use_web = use_web_verify or (max_local_score < 0.55)
                     
                     if should_use_web:
                         st.write("🔍 Searching live web for grounded evidence...")
