@@ -569,7 +569,8 @@ else:
         if st.button("Generate & Analyze"):
             with st.spinner("Hunting for Hallucinations..."):
                 if use_web:
-                    sources = search_web(query, limit=5)
+                    search_query = query[:200] if len(query) > 200 else query
+                    sources = search_web(search_query, limit=5)
                 else:
                     sources = db_instance.search(query, limit=3)
                     
@@ -598,7 +599,9 @@ else:
                     source_passage = custom_ground_truth
                     sources = [{"text": custom_ground_truth}]
                 elif use_web_verify:
-                    sources = search_web(pasted_text, limit=5)
+                    # Truncate query for better search engine results
+                    search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
+                    sources = search_web(search_query, limit=5)
                     source_passage = " ".join([s["text"] for s in sources])
                 else:
                     sources = db_instance.search(pasted_text, limit=3)
