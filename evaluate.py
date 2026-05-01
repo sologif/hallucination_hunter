@@ -23,12 +23,27 @@ def load_data(file_path, sample_size=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Hallucination Hunter against HaluEval")
-    parser.add_argument("--sample-size", type=int, default=10, help="Number of examples to evaluate (default: 10)")
-    parser.add_argument("--dataset", type=str, default="data/HaluEval/data/qa_data.json", help="Path to HaluEval JSON dataset")
+    parser.add_argument("--sample-size", type=int, default=50, help="Number of examples to evaluate (default: 50)")
+    parser.add_argument("--dataset", type=str, default="data/HaluEval/data/qa_data.json", help="Path to HaluEval JSON dataset or HF identifier (google-research/true)")
+    parser.add_argument("--subset", type=str, default="qags_cnndm", help="Subset for TRUE dataset (default: qags_cnndm)")
     args = parser.parse_args()
 
-    print(f"Loading {args.sample_size} examples from {args.dataset}...")
-    dataset = load_data(args.dataset, args.sample_size)
+    dataset = []
+    if args.dataset == "google-research/true":
+        try:
+            from datasets import load_dataset
+            print(f"Loading TRUE dataset ({args.subset}) from Hugging Face...")
+            ds = load_dataset(args.dataset, args.subset, split="train", streaming=True)
+            for i, item in enumerate(ds):
+                if i >= args.sample_size:
+                    break
+                dataset.append(item)
+        except Exception as e:
+            print(f"Error loading TRUE dataset: {e}")
+            return
+    else:
+        print(f"Loading {args.sample_size} examples from {args.dataset}...")
+        dataset = load_data(args.dataset, args.sample_size)
     
     if not dataset:
         print("No data loaded. Exiting.")
@@ -42,7 +57,21 @@ def main():
 
     print("Starting evaluation...")
     for item in tqdm(dataset, desc="Evaluating"):
-        # Handle both QA and Summarization formats
+        # Handle TRUE format
+        if "premise" in item and "hypothesis" in item:
+            knowledge = item["premise"]
+            claim = item["hypothesis"]
+            label = item.get("label", 1) # In TRUE, 1 is Entailment, 0 is Not Entailment
+            
+            res = analyze_hallucination(knowledge, claim)
+            # Map labels to binary: 0=Faithful, 1=Hallucinated
+            # TRUE Label 1 (Faithful) -> 0
+            # TRUE Label 0 (Hallucinated) -> 1
+            y_true.append(1 if label == 0 else 0)
+            y_pred.append(1 if res["verdict"] == "HALLUCINATED" else 0)
+            continue
+
+        # Handle HaluEval formats
         knowledge = item.get("knowledge", item.get("document", ""))
         right_answer = item.get("right_answer", item.get("right_summary", ""))
         hallucinated_answer = item.get("hallucinated_answer", item.get("hallucinated_summary", ""))

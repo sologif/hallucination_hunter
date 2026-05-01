@@ -57,7 +57,7 @@ def analyze_hallucination(source_text: str, generated_text: str):
     cosine_scores = util.cos_sim(claim_embeddings, source_embeddings)
     
     results = []
-    total_entailment_prob = 0.0
+    verified_claims_count = 0
     num_claims = len(generated_claims)
     has_hallucination = False
     
@@ -95,10 +95,10 @@ def analyze_hallucination(source_text: str, generated_text: str):
                 # Treat Neutral as hallucinated because we want strict grounding
                 is_hallucinated = pred_label in ["Contradiction", "Neutral"]
             
-            total_entailment_prob += entailment_prob
-            
         if is_hallucinated:
             has_hallucination = True
+        else:
+            verified_claims_count += 1
             
         results.append({
             "claim": claim,
@@ -109,11 +109,16 @@ def analyze_hallucination(source_text: str, generated_text: str):
             "is_hallucinated": bool(is_hallucinated)
         })
         
-    avg_confidence = round((total_entailment_prob / num_claims) * 100, 2)
+    avg_confidence = round((verified_claims_count / num_claims) * 100, 2)
     overall_verdict = "HALLUCINATED" if has_hallucination else "FAITHFUL"
     
     return {
         "verdict": overall_verdict,
         "confidence_score": float(avg_confidence),
-        "claims": results
+        "verified_claims": verified_claims_count,
+        "total_claims": num_claims,
+        "claims": results,
+        "cosine_scores": cosine_scores.tolist(), # Convert to list for JSON/UI serialization
+        "source_sentences": source_sentences,
+        "generated_claims": generated_claims
     }

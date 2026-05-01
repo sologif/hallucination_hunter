@@ -446,8 +446,9 @@ else:
                 # Use datasets library to load sample (Cloud compatible)
                 import random
                 ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
-                # Pick a random sample from the first 100 entries
-                skip = random.randint(0, 100)
+                # Proper shuffle and larger skip range
+                ds = ds.shuffle(seed=random.randint(0, 10000), buffer_size=1000)
+                skip = random.randint(0, 500)
                 sample = None
                 for i, s in enumerate(ds):
                     if i == skip:
@@ -486,9 +487,9 @@ else:
         
         st.markdown(f"""
         <div class="verdict-card {verdict_class}">
-            <div class="score-container">Confidence Score</div>
+            <div class="score-container">{verification_result.get('verified_claims', 0)}/{verification_result.get('total_claims', 0)} claims supported</div>
             <div class="verdict-title verdict-{verdict_class}">{verdict}</div>
-            <div class="score">{score:.2f}%</div>
+            <div class="score">{score:.2f}% Verified</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -587,6 +588,52 @@ else:
             """
             
         st.markdown(claims_html, unsafe_allow_html=True)
+        
+        # Alignment Matrix Visualization (Stretch Goal)
+        if "cosine_scores" in verification_result and verification_result["cosine_scores"]:
+            st.markdown('<div class="analysis-title">Alignment Matrix Visualization</div>', unsafe_allow_html=True)
+            st.write("This heatmap shows the semantic alignment between each generated claim (rows) and each source sentence (columns). Higher values (brighter colors) indicate stronger alignment.")
+            
+            scores = verification_result["cosine_scores"]
+            y_labels = [f"Claim {i+1}" for i in range(len(verification_result["generated_claims"]))]
+            x_labels = [f"Source {j+1}" for j in range(len(verification_result["source_sentences"]))]
+            
+            # Limit labels to avoid clutter
+            y_hover = [c[:100] + "..." if len(c) > 100 else c for c in verification_result["generated_claims"]]
+            x_hover = [s[:100] + "..." if len(s) > 100 else s for s in verification_result["source_sentences"]]
+
+            fig_heat = px.imshow(
+                scores,
+                labels=dict(x="Source Sentences", y="Generated Claims", color="Similarity"),
+                x=x_labels,
+                y=y_labels,
+                color_continuous_scale="Viridis",
+                aspect="auto"
+            )
+            
+            fig_heat.update_traces(
+                hovertemplate="Claim: %{y}<br>Source: %{x}<br>Similarity: %{z:.3f}<extra></extra>"
+            )
+            
+            fig_heat.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color="white",
+                margin=dict(l=20, r=20, t=20, b=20)
+            )
+            
+            st.plotly_chart(fig_heat, use_container_width=True)
+            
+            with st.expander("View Matrix Data (Sentence Map)"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Generated Claims**")
+                    for i, c in enumerate(verification_result["generated_claims"]):
+                        st.write(f"**Claim {i+1}:** {c}")
+                with col2:
+                    st.write("**Source Sentences**")
+                    for i, s in enumerate(verification_result["source_sentences"]):
+                        st.write(f"**Source {i+1}:** {s}")
 
     tab1, tab2, tab3 = st.tabs(["Ask AI", "Verify Pasted Text", "HaluEval Benchmark"])
     
@@ -622,7 +669,8 @@ else:
             try:
                 import random
                 ds = load_dataset("pminervini/HaluEval", "summarization", split="data", streaming=True)
-                skip = random.randint(0, 100)
+                ds = ds.shuffle(seed=random.randint(0, 10000), buffer_size=1000)
+                skip = random.randint(0, 500)
                 sample = None
                 for i, s in enumerate(ds):
                     if i == skip:
@@ -701,7 +749,7 @@ else:
                                         ["Summarization", "QA", "Dialogue"], 
                                         index=0)
         with col_b:
-            sample_count = st.slider("Sample Size", 5, 50, 10)
+            sample_count = st.slider("Sample Size", 20, 200, 50)
             
         dataset_paths = {
             "Summarization": "data/HaluEval/data/summarization_data.json",
@@ -764,13 +812,18 @@ else:
                 fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
                 
                 accuracy = (tp + tn) / len(y_true) if len(y_true) > 0 else 0
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                balanced_acc = (recall + specificity) / 2
                 
                 # Display Metrics
-                m1, m2, m3, m4 = st.columns(4)
+                m1, m2, m3, m4, m5 = st.columns(5)
                 m1.metric("Accuracy", f"{accuracy:.1%}")
-                m2.metric("True Positives", tp)
-                m3.metric("True Negatives", tn)
-                m4.metric("Missed", fn)
+                m2.metric("Balanced Acc", f"{balanced_acc:.1%}")
+                m3.metric("Hallucination Precision", f"{precision:.1%}")
+                m4.metric("True Positives", tp)
+                m5.metric("Missed", fn)
                 
                 # Visualizations
                 df = pd.DataFrame(results_data)
