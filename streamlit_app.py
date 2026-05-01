@@ -675,7 +675,7 @@ else:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.write("✨ **Auto-Search Enabled:** Local DB + Live Web")
+            use_web_verify = st.toggle("Enable Web Search Verification", value=True, help="If enabled, we will search the live web for ground truth if no manual source is provided.")
         with col2:
             use_hidden_truth = False
             if "hidden_ground_truth" in st.session_state:
