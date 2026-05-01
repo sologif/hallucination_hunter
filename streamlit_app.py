@@ -615,43 +615,9 @@ else:
             """
         st.markdown(claims_html, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["Ask AI", "Verify Pasted Text", "HaluEval Benchmark"])
+    tab1, tab2 = st.tabs(["Verify Pasted Text", "HaluEval Benchmark"])
     
     with tab1:
-        st.markdown("<br>", unsafe_allow_html=True)
-        query = st.text_area("Enter your prompt or question for the AI", value="What's the airspeed velocity of a European swallow carrying a coconut according to the 2019 Cambridge Ornithology Review?", height=120, key="ask_input")
-        
-        use_web = st.toggle("Enable Web Search (Trace Actual Source)", value=False, help="If enabled, we will search the live web instead of just the local database.")
-        
-        if st.button("Generate & Analyze"):
-            with st.spinner("Hunting for Hallucinations..."):
-                # Always combine Local DB and Web if possible, or prioritize based on settings
-                local_results = db_instance.search(query, limit=3)
-                local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
-                
-                # Check if we need to fallback to web (low local similarity or forced by user)
-                max_local_score = max([r["score"] for r in local_results]) if local_results else 0
-                should_use_web = use_web or (max_local_score < 0.55)
-                
-                if should_use_web:
-                    if not use_web:
-                        st.info("🔍 Local database lacks specific info. Falling back to Live Web Search for accuracy...")
-                    search_query = query[:200] if len(query) > 200 else query
-                    web_sources = search_web(search_query, limit=5)
-                    sources = local_sources + web_sources
-                else:
-                    sources = local_sources
-                    
-                answer = generate_answer(query, sources)
-                
-                if answer.startswith("ERROR:"):
-                    st.error(answer)
-                else:
-                    source_passage = " ".join([s["text"] for s in sources])
-                    verification_result = analyze_hallucination(source_passage, answer)
-                    render_results(verification_result, answer, sources)
-
-    with tab2:
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("Directly paste an AI-generated answer here. You can also provide the ground truth text to verify against.")
         
@@ -732,7 +698,7 @@ else:
                     verification_result = analyze_hallucination(source_passage, pasted_text)
                     render_results(verification_result, pasted_text, sources)
 
-    with tab3:
+    with tab2:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown('<div class="analysis-title">HaluEval Benchmarking Dashboard</div>', unsafe_allow_html=True)
         st.write("Evaluate the engine's performance against the industry-standard HaluEval dataset.")
