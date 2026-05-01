@@ -110,7 +110,13 @@ def analyze_hallucination(source_text: str, generated_text: str):
         })
         
     verified_claims_ratio = round((verified_claims_count / num_claims) * 100, 2)
-    overall_verdict = "HALLUCINATED" if has_hallucination else "FAITHFUL"
+    
+    # Calculate hallucination rate
+    hallucination_rate = (num_claims - verified_claims_count) / num_claims
+    
+    # Switch to a threshold ratio (e.g., > 30% of claims hallucinated) to avoid over-flagging
+    # and improve Balanced Accuracy on benchmarking datasets.
+    overall_verdict = "HALLUCINATED" if hallucination_rate > 0.3 else "FAITHFUL"
     
     return {
         "verdict": overall_verdict,
