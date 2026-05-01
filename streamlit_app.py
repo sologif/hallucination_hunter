@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 from datasets import load_dataset
 import numpy as np
+import gc
 
 # Optimization: Cache models and resources to stay within Streamlit Cloud memory limits
 @st.cache_resource
@@ -601,12 +602,19 @@ else:
         
         # Alignment Matrix Visualization (Stretch Goal)
         if "cosine_scores" in verification_result and verification_result["cosine_scores"]:
-            st.markdown('<div class="analysis-title">Alignment Matrix Visualization</div>', unsafe_allow_html=True)
-            st.write("This heatmap shows the semantic alignment between each generated claim (rows) and each source sentence (columns). Higher values (brighter colors) indicate stronger alignment.")
-            
             scores = verification_result["cosine_scores"]
-            y_labels = [f"Claim {i+1}" for i in range(len(verification_result["generated_claims"]))]
-            x_labels = [f"Source {j+1}" for j in range(len(verification_result["source_sentences"]))]
+            num_claims = len(verification_result["generated_claims"])
+            num_sources = len(verification_result["source_sentences"])
+            
+            # Optimization: Skip heatmap if matrix is too large (prevents memory spikes)
+            if num_claims * num_sources > 2500: # 50x50 threshold
+                st.warning("⚠️ Alignment Matrix is too large to visualize, but claim analysis is complete below.")
+            else:
+                st.markdown('<div class="analysis-title">Alignment Matrix Visualization</div>', unsafe_allow_html=True)
+                st.write("This heatmap shows the semantic alignment between each generated claim (rows) and each source sentence (columns). Higher values (brighter colors) indicate stronger alignment.")
+                
+                y_labels = [f"Claim {i+1}" for i in range(num_claims)]
+                x_labels = [f"Source {j+1}" for j in range(num_sources)]
             
             scores = verification_result["cosine_scores"]
             # Prepare hover data
@@ -791,6 +799,9 @@ else:
         if st.button("Run Benchmark Run"):
             progress_bar = st.progress(0)
             status_text = st.empty()
+            
+            # Explicitly clear cache/memory before run
+            gc.collect()
             
             results_data = []
             y_true = []

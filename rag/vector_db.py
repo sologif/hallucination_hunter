@@ -7,20 +7,18 @@ class HybridSearchDB:
         # Initialize in-memory Qdrant client for the demo
         self.client = QdrantClient(":memory:")
         self.collection_name = collection_name
+        # Use a small but effective model
         self.client.set_model("BAAI/bge-small-en-v1.5")
-        # Enable sparse embeddings for Hybrid Search
-        self.client.set_sparse_model("prithivida/Splade_PP_en_v1")
         
         self.setup_collection()
         self.ingest_sample_data()
 
     def setup_collection(self):
-        # fastembed takes care of the dense and sparse vectors
+        # Only setup dense vectors to save memory
         if not self.client.collection_exists(self.collection_name):
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=self.client.get_fastembed_vector_params(),
-                sparse_vectors_config=self.client.get_fastembed_sparse_vector_params()
+                vectors_config=self.client.get_fastembed_vector_params()
             )
 
     def ingest_sample_data(self):

@@ -1,8 +1,9 @@
 import spacy
-import en_core_web_sm
-from sentence_transformers import SentenceTransformer, util, CrossEncoder
+from sentence_transformers import CrossEncoder
+from fastembed import TextEmbedding
 import torch
 import numpy as np
+import gc
 
 # Global model holders
 _nlp = None
@@ -12,16 +13,23 @@ _embedder = None
 def get_models():
     global _nlp, _nli_model, _embedder
     if _nlp is None:
-        _nlp = en_core_web_sm.load()
+        # Load only the senter to save ~50MB RAM
+        _nlp = spacy.load("en_core_web_sm", disable=["ner", "parser", "lemmatizer", "textcat"])
+        _nlp.add_pipe("sentencizer")
     if _nli_model is None:
         import os
-        if os.path.isdir('./models/nli_finetuned'):
-            _nli_model = CrossEncoder('./models/nli_finetuned')
+        model_path = './models/nli_finetuned'
+        if os.path.exists(os.path.join(model_path, 'config.json')):
+            try:
+                _nli_model = CrossEncoder(model_path)
+            except Exception:
+                _nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-small')
         else:
             # Use 'small' instead of 'base' to save memory on Streamlit Cloud
             _nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-small')
     if _embedder is None:
-        _embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        # FastEmbed uses ONNX runtime, which is much lighter than PyTorch
+        _embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
     return _nlp, _nli_model, _embedder
 
 # The standard mapping for cross-encoder/nli-deberta-v3-small
@@ -49,65 +57,83 @@ def analyze_hallucination(source_text: str, generated_text: str):
     if not source_sentences or not generated_claims:
         return {"verdict": "ERROR", "confidence_score": 0.0, "details": "Empty source or generated text.", "claims": []}
     
-    # 1. Embed source sentences and claims
-    source_embeddings = embedder.encode(source_sentences, convert_to_tensor=True)
-    claim_embeddings = embedder.encode(generated_claims, convert_to_tensor=True)
+    # 1. Embed source sentences and claims using FastEmbed (yields numpy arrays)
+    source_embeddings = np.array(list(embedder.embed(source_sentences)))
+    claim_embeddings = np.array(list(embedder.embed(generated_claims)))
     
-    # 2. Compute similarity to find best matching source sentence for each claim
-    cosine_scores = util.cos_sim(claim_embeddings, source_embeddings)
+    # 2. Compute similarity matrix (Cosine Similarity = Dot Product of normalized vectors)
+    # Normalize vectors for cosine similarity
+    source_embeddings = source_embeddings / np.linalg.norm(source_embeddings, axis=1, keepdims=True)
+    claim_embeddings = claim_embeddings / np.linalg.norm(claim_embeddings, axis=1, keepdims=True)
+    cosine_scores = np.dot(claim_embeddings, source_embeddings.T)
     
     results = []
     verified_claims_count = 0
     num_claims = len(generated_claims)
-    has_hallucination = False
+    
+    # Prepare pairs for batched NLI inference to save overhead
+    nli_pairs = []
+    best_source_indices = []
     
     for i, claim in enumerate(generated_claims):
-        # Find best source sentence
-        best_source_idx = torch.argmax(cosine_scores[i]).item()
-        best_source_sentence = source_sentences[best_source_idx]
-        similarity_score = cosine_scores[i][best_source_idx].item()
+        best_source_idx = np.argmax(cosine_scores[i])
+        best_source_indices.append(best_source_idx)
+        similarity_score = cosine_scores[i][best_source_idx]
         
-        # 3. Strict Similarity Threshold Check
-        if similarity_score < 0.35:
-            # The closest source sentence is too irrelevant. Claim is unsupported.
+        if similarity_score >= 0.35:
+            nli_pairs.append((source_sentences[best_source_idx], claim))
+        else:
+            nli_pairs.append(None) # Skip NLI for irrelevant claims
+
+    # 3. Batched NLI Prediction
+    valid_pairs = [p for p in nli_pairs if p is not None]
+    if valid_pairs:
+        all_nli_logits = nli_model.predict(valid_pairs, batch_size=8)
+    else:
+        all_nli_logits = []
+
+    logits_idx = 0
+    for i, claim in enumerate(generated_claims):
+        best_source_idx = best_source_indices[i]
+        best_source_sentence = source_sentences[best_source_idx]
+        similarity_score = cosine_scores[i][best_source_idx]
+        
+        if nli_pairs[i] is None:
             pred_label = "Unsupported"
             entailment_prob = 0.0
             is_hallucinated = True
         else:
-            # 4. NLI (Premise=Source, Hypothesis=Claim)
-            nli_logits = nli_model.predict([(best_source_sentence, claim)])[0]
-            # apply softmax to get probabilities
-            nli_probs = np.exp(nli_logits) / np.sum(np.exp(nli_logits))
+            nli_logits = all_nli_logits[logits_idx]
+            logits_idx += 1
             
+            # softmax
+            nli_probs = np.exp(nli_logits) / np.sum(np.exp(nli_logits))
             pred_label_idx = np.argmax(nli_probs)
             
-            # Detect if we are using the fine-tuned 2-label model
             if len(nli_probs) == 2:
-                # Fine-tuned: 0: Faithful, 1: Hallucinated
                 FINETUNED_MAPPING = {0: "Entailment", 1: "Contradiction"}
                 pred_label = FINETUNED_MAPPING.get(pred_label_idx, "Unknown")
                 entailment_prob = nli_probs[0]
                 is_hallucinated = (pred_label == "Contradiction")
             else:
-                # Original: 0: Contradiction, 1: Entailment, 2: Neutral
                 pred_label = LABEL_MAPPING.get(pred_label_idx, "Unknown")
                 entailment_prob = nli_probs[1]
-                # Treat Neutral as hallucinated because we want strict grounding
                 is_hallucinated = pred_label in ["Contradiction", "Neutral"]
             
-        if is_hallucinated:
-            has_hallucination = True
-        else:
+        if not is_hallucinated:
             verified_claims_count += 1
             
         results.append({
             "claim": claim,
             "best_source_sentence": best_source_sentence,
-            "similarity_score": float(round(similarity_score, 3)),
+            "similarity_score": float(round(float(similarity_score), 3)),
             "nli_label": pred_label,
             "entailment_prob": float(round(float(entailment_prob), 3)),
             "is_hallucinated": bool(is_hallucinated)
         })
+    
+    # Force garbage collection to free up memory after large analysis
+    gc.collect()
         
     verified_claims_ratio = round((verified_claims_count / num_claims) * 100, 2)
     
