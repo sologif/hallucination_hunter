@@ -551,7 +551,7 @@ else:
             </ul>
         </div>
         """, unsafe_allow_html=True)
-        
+
         # Detailed Analysis
         st.markdown('<div class="analysis-title">Sentence-Level Validation</div>', unsafe_allow_html=True)
         
@@ -597,80 +597,7 @@ else:
                 </div>
             </div>
             """
-            
         st.markdown(claims_html, unsafe_allow_html=True)
-        
-        # Alignment Matrix Visualization (Stretch Goal)
-        if "cosine_scores" in verification_result and verification_result["cosine_scores"]:
-            scores = verification_result["cosine_scores"]
-            num_claims = len(verification_result["generated_claims"])
-            num_sources = len(verification_result["source_sentences"])
-            
-            # Optimization: Skip heatmap if matrix is too large (prevents memory spikes)
-            if num_claims * num_sources > 2500: # 50x50 threshold
-                st.warning("⚠️ Alignment Matrix is too large to visualize, but claim analysis is complete below.")
-            else:
-                st.markdown('<div class="analysis-title">Alignment Matrix Visualization</div>', unsafe_allow_html=True)
-                st.write("This heatmap shows the semantic alignment between each generated claim (rows) and each source sentence (columns). Higher values (brighter colors) indicate stronger alignment.")
-                
-                y_labels = [f"Claim {i+1}" for i in range(num_claims)]
-                x_labels = [f"Source {j+1}" for j in range(num_sources)]
-            
-            scores = verification_result["cosine_scores"]
-            # Prepare hover data
-            claims_text = verification_result["generated_claims"]
-            sources_text = verification_result["source_sentences"]
-            
-            hover_text = []
-            for i, claim in enumerate(claims_text):
-                row = []
-                for j, source in enumerate(sources_text):
-                    row.append(f"Claim: {claim[:100]}...<br>Source: {source[:100]}...<br>Similarity: {scores[i][j]:.3f}")
-                hover_text.append(row)
-
-            fig_heat = px.imshow(
-                scores,
-                labels=dict(x="Source Sentences", y="Generated Claims", color="Similarity"),
-                x=x_labels,
-                y=y_labels,
-                color_continuous_scale="Magma",
-                aspect="auto",
-                title="Semantic Alignment Matrix"
-            )
-            
-            fig_heat.update_traces(
-                hovertemplate="%{customdata}<extra></extra>",
-                customdata=hover_text
-            )
-            
-            fig_heat.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font_color="white",
-                title_font_family="Outfit",
-                title_font_size=24,
-                margin=dict(l=20, r=20, t=60, b=20),
-                coloraxis_colorbar=dict(
-                    title="Similarity",
-                    thicknessmode="pixels", thickness=15,
-                    lenmode="fraction", len=0.8,
-                    yanchor="top", y=1,
-                    ticks="outside"
-                )
-            )
-            
-            st.plotly_chart(fig_heat, use_container_width=True)
-            
-            with st.expander("View Matrix Data (Sentence Map)"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**Generated Claims**")
-                    for i, c in enumerate(verification_result["generated_claims"]):
-                        st.write(f"**Claim {i+1}:** {c}")
-                with col2:
-                    st.write("**Source Sentences**")
-                    for i, s in enumerate(verification_result["source_sentences"]):
-                        st.write(f"**Source {i+1}:** {s}")
 
     tab1, tab2, tab3 = st.tabs(["Ask AI", "Verify Pasted Text", "HaluEval Benchmark"])
     
