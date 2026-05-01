@@ -10,6 +10,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const sourcesList = document.getElementById('sourcesList');
     const verdictCard = document.querySelector('.verdict-card');
 
+    // Login Elements
+    const loginSection = document.getElementById('loginSection');
+    const appContainer = document.getElementById('appContainer');
+    const loginBtn = document.getElementById('loginBtn');
+    const guestLoginBtn = document.getElementById('guestLoginBtn');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginError = document.getElementById('loginError');
+
+    const handleLoginSuccess = () => {
+        loginSection.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        // Trigger entrance animation for header
+        appContainer.querySelector('header').style.animation = 'slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
+    };
+
+    loginBtn.addEventListener('click', () => {
+        const username = usernameInput.value;
+        const password = passwordInput.value;
+
+        if (username === 'admin' && password === 'Domaiyn labs') {
+            handleLoginSuccess();
+        } else {
+            loginError.classList.remove('hidden');
+            setTimeout(() => loginError.classList.add('hidden'), 3000);
+        }
+    });
+
+    guestLoginBtn.addEventListener('click', () => {
+        handleLoginSuccess();
+    });
+
     // Default query showcasing the capabilities
     if (!queryInput.value) {
         queryInput.value = "What's the airspeed velocity of a European swallow carrying a coconut according to the 2019 Cambridge Ornithology Review?";

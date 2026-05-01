@@ -14,7 +14,29 @@
         <div class="ambient-blob blob-2"></div>
     </div>
     
-    <div class="container">
+    <div id="loginSection" class="login-container">
+        <div class="glass-panel login-card">
+            <header>
+                <h1>Hallucination <span>Hunter</span></h1>
+                <p>Enterprise-grade AI verification. Sign in to access.</p>
+            </header>
+            <div class="input-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter your username">
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password">
+            </div>
+            <div class="login-actions">
+                <button id="loginBtn">Login</button>
+                <button id="guestLoginBtn" class="secondary-btn">Login as Guest</button>
+            </div>
+            <p id="loginError" class="error-text hidden">Invalid username or password</p>
+        </div>
+    </div>
+
+    <div id="appContainer" class="container hidden">
         <header>
             <h1>Hallucination <span>Hunter</span></h1>
             <p>Enterprise-grade AI verification. Grounded against factual sources to eliminate hallucinations using Natural Language Inference.</p>

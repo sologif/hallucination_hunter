@@ -165,6 +165,84 @@ textarea:focus {
     margin-top: 1.5rem;
 }
 
+/* Login Page Styles */
+.login-container {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: fadeIn 0.8s ease;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 500px;
+    padding: 3.5rem;
+}
+
+.login-card header {
+    margin-bottom: 2.5rem;
+}
+
+.login-card h1 {
+    font-size: 2.5rem;
+}
+
+.login-card p {
+    font-size: 1rem;
+}
+
+.login-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+input[type="text"], input[type="password"] {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.1);
+}
+
+.secondary-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    box-shadow: none;
+}
+
+.secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 15px rgba(79, 172, 254, 0.1);
+}
+
+.error-text {
+    color: var(--danger);
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    text-align: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 button {
     background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
     color: white;
