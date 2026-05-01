@@ -2,8 +2,12 @@ import streamlit as st
 from engine import analyze_hallucination
 from rag.vector_db import db as vector_db
 from rag.generator import generate_answer
+from rag.web_search import search_web
 import html
 import os
+import json
+import pandas as pd
+import plotly.express as px
 
 # Handle Hugging Face Token for higher rate limits
 if "HF_TOKEN" in st.secrets:
@@ -533,15 +537,21 @@ else:
             
         st.markdown(claims_html, unsafe_allow_html=True)
 
-    tab1, tab2 = st.tabs(["Ask AI", "Verify Pasted Text"])
+    tab1, tab2, tab3 = st.tabs(["Ask AI", "Verify Pasted Text", "HaluEval Benchmark"])
     
     with tab1:
         st.markdown("<br>", unsafe_allow_html=True)
         query = st.text_area("Enter your prompt or question for the AI", value="What's the airspeed velocity of a European swallow carrying a coconut according to the 2019 Cambridge Ornithology Review?", height=120, key="ask_input")
         
+        use_web = st.toggle("Enable Web Search (Trace Actual Source)", value=False, help="If enabled, we will search the live web instead of just the local database.")
+        
         if st.button("Generate & Analyze"):
             with st.spinner("Hunting for Hallucinations..."):
-                sources = vector_db.search(query, limit=3)
+                if use_web:
+                    sources = search_web(query, limit=3)
+                else:
+                    sources = vector_db.search(query, limit=3)
+                    
                 answer = generate_answer(query, sources)
                 
                 if answer.startswith("ERROR:"):
@@ -559,14 +569,100 @@ else:
         
         pasted_text = st.text_area("Paste text to verify", value="The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.", height=120, key="verify_input")
         
+        use_web_verify = st.toggle("Enable Web Search for Ground Truth", value=False, key="web_verify_toggle")
+
         if st.button("Verify Pasted Text"):
             with st.spinner("Validating claims..."):
                 if custom_ground_truth.strip():
                     source_passage = custom_ground_truth
                     sources = [{"text": custom_ground_truth}]
+                elif use_web_verify:
+                    sources = search_web(pasted_text, limit=3)
+                    source_passage = " ".join([s["text"] for s in sources])
                 else:
                     sources = vector_db.search(pasted_text, limit=3)
                     source_passage = " ".join([s["text"] for s in sources])
                 
                 verification_result = analyze_hallucination(source_passage, pasted_text)
                 render_results(verification_result, pasted_text, sources)
+
+    with tab3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="analysis-title">HaluEval Benchmarking Dashboard</div>', unsafe_allow_html=True)
+        st.write("Evaluate the engine's performance against the industry-standard HaluEval dataset.")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            dataset_option = st.selectbox("Select HaluEval Dataset", 
+                                        ["Summarization", "QA", "Dialogue"], 
+                                        index=0)
+        with col_b:
+            sample_count = st.slider("Sample Size", 5, 50, 10)
+            
+        dataset_paths = {
+            "Summarization": "data/HaluEval/data/summarization_data.json",
+            "QA": "data/HaluEval/data/qa_data.json",
+            "Dialogue": "data/HaluEval/data/dialogue_data.json"
+        }
+        
+        if st.button("Run Benchmark Run"):
+            path = dataset_paths[dataset_option]
+            if not os.path.exists(path):
+                st.error(f"Dataset not found at {path}. Please ensure HaluEval is cloned.")
+            else:
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                results_data = []
+                y_true = []
+                y_pred = []
+                
+                # Load data
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = [json.loads(line) for i, line in enumerate(f) if i < sample_count]
+                
+                for i, item in enumerate(data):
+                    status_text.text(f"Evaluating sample {i+1}/{len(data)}...")
+                    progress_bar.progress((i + 1) / len(data))
+                    
+                    knowledge = item.get("knowledge", item.get("document", ""))
+                    # In HaluEval, we usually test one faithful and one hallucinated per entry
+                    faithful_ans = item.get("right_answer", item.get("right_summary", ""))
+                    hallucinated_ans = item.get("hallucinated_answer", item.get("hallucinated_summary", ""))
+                    
+                    if knowledge:
+                        # Test Faithful
+                        res_f = analyze_hallucination(knowledge, faithful_ans)
+                        y_true.append(0) # 0 = Faithful
+                        y_pred.append(0 if res_f["verdict"] == "FAITHFUL" else 1)
+                        results_data.append({"Type": "Faithful", "Prediction": res_f["verdict"], "Correct": res_f["verdict"] == "FAITHFUL"})
+                        
+                        # Test Hallucinated
+                        res_h = analyze_hallucination(knowledge, hallucinated_ans)
+                        y_true.append(1) # 1 = Hallucinated
+                        y_pred.append(1 if res_h["verdict"] == "HALLUCINATED" else 0)
+                        results_data.append({"Type": "Hallucinated", "Prediction": res_h["verdict"], "Correct": res_h["verdict"] == "HALLUCINATED"})
+
+                # Metrics Calculation
+                tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
+                tn = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 0)
+                fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
+                fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
+                
+                accuracy = (tp + tn) / len(y_true) if len(y_true) > 0 else 0
+                
+                # Display Metrics
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Accuracy", f"{accuracy:.1%}")
+                m2.metric("True Positives", tp)
+                m3.metric("True Negatives", tn)
+                m4.metric("Missed", fn)
+                
+                # Visualizations
+                df = pd.DataFrame(results_data)
+                fig = px.pie(df, names='Correct', title='Prediction Accuracy', color='Correct',
+                           color_discrete_map={True: '#10b981', False: '#ef4444'})
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.write("Detailed Breakdown:")
+                st.dataframe(df, use_container_width=True)
