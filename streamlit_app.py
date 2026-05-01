@@ -8,6 +8,7 @@ import os
 import json
 import pandas as pd
 import plotly.express as px
+from datasets import load_dataset
 
 # Handle Hugging Face Token for higher rate limits
 if "HF_TOKEN" in st.secrets:
@@ -606,29 +607,39 @@ else:
         }
         
         if st.button("Run Benchmark Run"):
-            path = dataset_paths[dataset_option]
-            if not os.path.exists(path):
-                st.error(f"Dataset not found at {path}. Please ensure HaluEval is cloned.")
-            else:
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                results_data = []
-                y_true = []
-                y_pred = []
-                
-                # Load data
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = [json.loads(line) for i, line in enumerate(f) if i < sample_count]
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            results_data = []
+            y_true = []
+            y_pred = []
+            
+            # Column Mappings for HaluEval HF dataset
+            mappings = {
+                "Summarization": {"subset": "summarization", "knowledge": "document", "faithful": "right_summary", "hallucinated": "hallucinated_summary"},
+                "QA": {"subset": "qa", "knowledge": "knowledge", "faithful": "right_answer", "hallucinated": "hallucinated_answer"},
+                "Dialogue": {"subset": "dialogue", "knowledge": "knowledge", "faithful": "right_response", "hallucinated": "hallucinated_response"}
+            }
+            
+            m = mappings[dataset_option]
+            
+            try:
+                status_text.text(f"Loading {dataset_option} dataset from Hugging Face...")
+                dataset = load_dataset("pminervini/HaluEval", m["subset"], split="train", streaming=True)
+                # Take only the requested sample count
+                data = []
+                for i, entry in enumerate(dataset):
+                    if i >= sample_count:
+                        break
+                    data.append(entry)
                 
                 for i, item in enumerate(data):
                     status_text.text(f"Evaluating sample {i+1}/{len(data)}...")
                     progress_bar.progress((i + 1) / len(data))
                     
-                    knowledge = item.get("knowledge", item.get("document", ""))
-                    # In HaluEval, we usually test one faithful and one hallucinated per entry
-                    faithful_ans = item.get("right_answer", item.get("right_summary", ""))
-                    hallucinated_ans = item.get("hallucinated_answer", item.get("hallucinated_summary", ""))
+                    knowledge = item.get(m["knowledge"], "")
+                    faithful_ans = item.get(m["faithful"], "")
+                    hallucinated_ans = item.get(m["hallucinated"], "")
                     
                     if knowledge:
                         # Test Faithful
@@ -660,9 +671,17 @@ else:
                 
                 # Visualizations
                 df = pd.DataFrame(results_data)
-                fig = px.pie(df, names='Correct', title='Prediction Accuracy', color='Correct',
+                fig = px.pie(df, names='Correct', title='Overall Prediction Accuracy', color='Correct',
                            color_discrete_map={True: '#10b981', False: '#ef4444'})
                 st.plotly_chart(fig, use_container_width=True)
                 
+                # Type Comparison
+                fig2 = px.bar(df, x='Type', color='Correct', barmode='group', title='Accuracy by Sample Type',
+                            color_discrete_map={True: '#10b981', False: '#ef4444'})
+                st.plotly_chart(fig2, use_container_width=True)
+                
                 st.write("Detailed Breakdown:")
                 st.dataframe(df, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"Error loading or evaluating dataset: {e}")
