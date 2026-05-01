@@ -1,5 +1,5 @@
 import streamlit as st
-from engine import analyze_hallucination
+from engine import analyze_hallucination, get_models
 from rag.vector_db import db as vector_db
 from rag.generator import generate_answer
 from rag.web_search import search_web
@@ -9,6 +9,15 @@ import json
 import pandas as pd
 import plotly.express as px
 from datasets import load_dataset
+
+# Optimization: Cache models and resources to stay within Streamlit Cloud memory limits
+@st.cache_resource
+def load_resources():
+    models = get_models()
+    return models, vector_db
+
+# Trigger resource loading
+resources, db_instance = load_resources()
 
 # Handle Hugging Face Token for higher rate limits
 if "HF_TOKEN" in st.secrets:
@@ -562,7 +571,7 @@ else:
                 if use_web:
                     sources = search_web(query, limit=5)
                 else:
-                    sources = vector_db.search(query, limit=3)
+                    sources = db_instance.search(query, limit=3)
                     
                 answer = generate_answer(query, sources)
                 
@@ -592,7 +601,7 @@ else:
                     sources = search_web(pasted_text, limit=5)
                     source_passage = " ".join([s["text"] for s in sources])
                 else:
-                    sources = vector_db.search(pasted_text, limit=3)
+                    sources = db_instance.search(pasted_text, limit=3)
                     source_passage = " ".join([s["text"] for s in sources])
                 
                 verification_result = analyze_hallucination(source_passage, pasted_text)

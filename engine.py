@@ -4,26 +4,37 @@ from sentence_transformers import SentenceTransformer, util, CrossEncoder
 import torch
 import numpy as np
 
-# Load models globally to avoid reloading
-nlp = en_core_web_sm.load()
+# Global model holders
+_nlp = None
+_nli_model = None
+_embedder = None
 
-import os
-if os.path.isdir('./models/nli_finetuned'):
-    nli_model = CrossEncoder('./models/nli_finetuned')
-else:
-    nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
-
-embedder = SentenceTransformer('all-MiniLM-L6-v2')
+def get_models():
+    global _nlp, _nli_model, _embedder
+    if _nlp is None:
+        _nlp = en_core_web_sm.load()
+    if _nli_model is None:
+        import os
+        if os.path.isdir('./models/nli_finetuned'):
+            _nli_model = CrossEncoder('./models/nli_finetuned')
+        else:
+            # Use 'small' instead of 'base' to save memory on Streamlit Cloud
+            _nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-small')
+    if _embedder is None:
+        _embedder = SentenceTransformer('all-MiniLM-L6-v2')
+    return _nlp, _nli_model, _embedder
 
 # The standard mapping for cross-encoder/nli-deberta-v3-small
 # 0: Contradiction, 1: Entailment, 2: Neutral
 LABEL_MAPPING = {0: "Contradiction", 1: "Entailment", 2: "Neutral"}
 
 def extract_claims(text: str):
+    nlp, _, _ = get_models()
     doc = nlp(text)
     return [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 3]
 
 def analyze_hallucination(source_text: str, generated_text: str):
+    nlp, nli_model, embedder = get_models()
     source_sentences = extract_claims(source_text)
     generated_claims = extract_claims(generated_text)
     
