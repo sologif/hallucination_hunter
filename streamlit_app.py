@@ -629,7 +629,13 @@ else:
                 local_results = db_instance.search(query, limit=3)
                 local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
                 
-                if use_web:
+                # Check if we need to fallback to web (low local similarity or forced by user)
+                max_local_score = max([r["score"] for r in local_results]) if local_results else 0
+                should_use_web = use_web or (max_local_score < 0.45)
+                
+                if should_use_web:
+                    if not use_web:
+                        st.info("🔍 Local database lacks specific info. Falling back to Live Web Search for accuracy...")
                     search_query = query[:200] if len(query) > 200 else query
                     web_sources = search_web(search_query, limit=5)
                     sources = local_sources + web_sources
@@ -697,29 +703,27 @@ else:
                     source_passage = custom_ground_truth
                     sources = [{"title": "Manual Source", "text": custom_ground_truth, "url": "#", "source": "manual"}]
                 else:
-                    # ALWAYS perform both Local DB and Web search for maximum accuracy
-                    st.write("🔍 Searching local database and live web for ground truth...")
-                    
-                    # 1. Local DB Search
+                    # Perform Local DB Search
                     local_results = db_instance.search(pasted_text, limit=3)
                     local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
                     
-                    # 2. Web Search Fallback/Supplement
-                    search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
-                    web_sources = search_web(search_query, limit=5)
+                    # Auto-fallback or manual web search
+                    max_local_score = max([r["score"] for r in local_results]) if local_results else 0
+                    should_use_web = use_web_verify or (max_local_score < 0.45)
                     
-                    # Fallback for Web: Try even shorter query if empty
-                    if not web_sources and len(search_query) > 60:
-                        short_query = search_query[:60]
-                        web_sources = search_web(short_query, limit=5)
+                    if should_use_web:
+                        st.write("🔍 Searching live web for grounded evidence...")
+                        search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
+                        web_sources = search_web(search_query, limit=5)
+                        
+                        # Fallback for Web: Try even shorter query if empty
+                        if not web_sources and len(search_query) > 60:
+                            web_sources = search_web(search_query[:60], limit=5)
+                        
+                        sources = local_sources + web_sources
+                    else:
+                        sources = local_sources
                     
-                    # Fallback for Web: Try first 3 words
-                    if not web_sources:
-                        words = search_query.split()[:3]
-                        if words:
-                            web_sources = search_web(" ".join(words), limit=3)
-                    
-                    sources = local_sources + web_sources
                     source_passage = " ".join([s["text"] for s in sources])
                 
                 if not sources:
