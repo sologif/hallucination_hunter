@@ -436,12 +436,38 @@ else:
     st.markdown('<div class="main-title">Hallucination <span>Hunter</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Enterprise-grade AI verification. Grounded against factual sources to eliminate hallucinations using Natural Language Inference.</div>', unsafe_allow_html=True)
     
-    # Add a tiny logout button at top right
-    col1, col2 = st.columns([0.8, 0.2])
-    with col2:
-        if st.button("Log out"):
+    # Sidebar for HaluEval Playground and settings
+    with st.sidebar:
+        st.markdown('<div class="main-title" style="font-size:1.5rem;">HaluEval <span>Playground</span></div>', unsafe_allow_html=True)
+        st.write("Automatically load benchmark samples to test the model.")
+        
+        if st.button("🎲 Load Random HaluEval Sample"):
+            try:
+                # Load a random sample from the cached dataset
+                import random
+                # We use the local JSON file for faster random access if streaming is slow
+                with open("data/HaluEval/data/summarization_data.json", "r") as f:
+                    # Read all lines (approx 10,000)
+                    lines = f.readlines()
+                    line = random.choice(lines)
+                    sample = json.loads(line)
+                
+                if sample:
+                    st.session_state.pasted_text = sample["hallucinated_summary"]
+                    st.session_state.hidden_ground_truth = sample["document"]
+                    st.success("Loaded HaluEval Sample!")
+            except Exception as e:
+                st.error(f"Error loading sample: {e}")
+        
+        st.markdown("---")
+        if st.button("🚪 Log out"):
             st.session_state['logged_in'] = False
             st.rerun()
+
+    # Add a tiny logout button at top right (redundant but keeping for UI consistency)
+    col1, col2 = st.columns([0.8, 0.2])
+    with col2:
+        pass # Using sidebar now
 
     def render_results(verification_result, answer_text, sources_list):
         verdict = verification_result["verdict"]
@@ -587,17 +613,33 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("Directly paste an AI-generated answer here. You can also provide the ground truth text to verify against.")
         
-        custom_ground_truth = st.text_area("Custom Ground Truth (Optional)", placeholder="Paste the source text/knowledge here to verify against. If left empty, we will search the Vector Database.", height=150, key="custom_source")
+        # Handle inputs from session state (HaluEval Sample)
+        initial_text = st.session_state.get("pasted_text", "The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.")
+        pasted_text = st.text_area("Paste text to verify", value=initial_text, height=150, key="verify_input")
         
-        pasted_text = st.text_area("Paste text to verify", value="The 2019 Cambridge Ornithology Review proved that European swallows can easily carry 2-pound coconuts for distances up to 50 miles.", height=120, key="verify_input")
-        
-        use_web_verify = st.toggle("Enable Web Search for Ground Truth", value=False, key="web_verify_toggle")
+        col1, col2 = st.columns(2)
+        with col1:
+            use_web_verify = st.toggle("Enable Web Search for Ground Truth", value=False, key="web_verify_toggle")
+        with col2:
+            use_hidden_truth = False
+            if "hidden_ground_truth" in st.session_state:
+                use_hidden_truth = st.toggle("Use Loaded HaluEval Ground Truth", value=True, key="use_hidden_truth")
+
+        custom_ground_truth = ""
+        if not use_web_verify and not use_hidden_truth:
+            custom_ground_truth = st.text_area("Custom Ground Truth (Optional)", placeholder="Paste the source text/knowledge here to verify against.", height=150, key="custom_source")
 
         if st.button("Verify Pasted Text"):
             with st.spinner("Validating claims..."):
-                if custom_ground_truth.strip():
+                source_passage = ""
+                sources = []
+                
+                if use_hidden_truth and "hidden_ground_truth" in st.session_state:
+                    source_passage = st.session_state.hidden_ground_truth
+                    sources = [{"title": "HaluEval Hidden Document", "text": source_passage, "url": "#", "source": "HaluEval"}]
+                elif custom_ground_truth.strip():
                     source_passage = custom_ground_truth
-                    sources = [{"text": custom_ground_truth}]
+                    sources = [{"title": "Manual Source", "text": custom_ground_truth, "url": "#", "source": "manual"}]
                 elif use_web_verify:
                     # Truncate query for better search engine results
                     search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
