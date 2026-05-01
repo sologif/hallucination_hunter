@@ -544,9 +544,14 @@ else:
             title = s.get("title", f"Source {i+1}")
             url = s.get("url", "")
             text = s.get("text", "")
+            source_type = s.get("source", "local").upper()
             
-            link_html = f'<a href="{url}" target="_blank" style="color:var(--accent-primary); text-decoration:none; font-size:0.8rem; margin-left:10px;">[Visit Source]</a>' if url else ""
-            sources_html += f'<li class="source-item"><strong>{html.escape(title)}:</strong>{link_html}<br>{html.escape(text)}</li>'
+            # Badge for source type
+            type_color = "var(--accent-primary)" if source_type == "WEB" else "var(--success)"
+            type_badge = f'<span style="background:{type_color}22; color:{type_color}; border:1px solid {type_color}44; padding:2px 8px; border-radius:4px; font-size:0.7rem; margin-right:10px; font-weight:bold;">{source_type}</span>'
+            
+            link_html = f'<a href="{url}" target="_blank" style="color:var(--accent-primary); text-decoration:none; font-size:0.8rem; margin-left:10px;">[Visit Source]</a>' if url and url != "#" else ""
+            sources_html += f'<li class="source-item">{type_badge}<strong>{html.escape(title)}:</strong>{link_html}<br>{html.escape(text)}</li>'
         if not sources_html:
             sources_html = '<li class="source-item">No relevant sources found in the database.</li>'
             
@@ -620,11 +625,16 @@ else:
         
         if st.button("Generate & Analyze"):
             with st.spinner("Hunting for Hallucinations..."):
+                # Always combine Local DB and Web if possible, or prioritize based on settings
+                local_results = db_instance.search(query, limit=3)
+                local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
+                
                 if use_web:
                     search_query = query[:200] if len(query) > 200 else query
-                    sources = search_web(search_query, limit=5)
+                    web_sources = search_web(search_query, limit=5)
+                    sources = local_sources + web_sources
                 else:
-                    sources = db_instance.search(query, limit=3)
+                    sources = local_sources
                     
                 answer = generate_answer(query, sources)
                 
@@ -665,7 +675,7 @@ else:
         
         col1, col2 = st.columns(2)
         with col1:
-            use_web_verify = st.toggle("Enable Web Search for Ground Truth", value=False, key="web_verify_toggle")
+            st.write("✨ **Auto-Search Enabled:** Local DB + Live Web")
         with col2:
             use_hidden_truth = False
             if "hidden_ground_truth" in st.session_state:
@@ -686,31 +696,36 @@ else:
                 elif custom_ground_truth.strip():
                     source_passage = custom_ground_truth
                     sources = [{"title": "Manual Source", "text": custom_ground_truth, "url": "#", "source": "manual"}]
-                elif use_web_verify:
-                    # Multi-stage search fallback
+                else:
+                    # ALWAYS perform both Local DB and Web search for maximum accuracy
+                    st.write("🔍 Searching local database and live web for ground truth...")
+                    
+                    # 1. Local DB Search
+                    local_results = db_instance.search(pasted_text, limit=3)
+                    local_sources = [{"title": "Local Database Match", "text": r["text"], "url": "#", "source": "local"} for r in local_results]
+                    
+                    # 2. Web Search Fallback/Supplement
                     search_query = pasted_text[:150] if len(pasted_text) > 150 else pasted_text
-                    sources = search_web(search_query, limit=5)
+                    web_sources = search_web(search_query, limit=5)
                     
-                    # Fallback 1: Try even shorter query if empty
-                    if not sources and len(search_query) > 60:
+                    # Fallback for Web: Try even shorter query if empty
+                    if not web_sources and len(search_query) > 60:
                         short_query = search_query[:60]
-                        sources = search_web(short_query, limit=5)
+                        web_sources = search_web(short_query, limit=5)
                     
-                    # Fallback 2: Try first 3 words (likely the subject)
-                    if not sources:
+                    # Fallback for Web: Try first 3 words
+                    if not web_sources:
                         words = search_query.split()[:3]
                         if words:
-                            sources = search_web(" ".join(words), limit=3)
-
-                    source_passage = " ".join([s["text"] for s in sources])
-                else:
-                    sources = db_instance.search(pasted_text, limit=3)
+                            web_sources = search_web(" ".join(words), limit=3)
+                    
+                    sources = local_sources + web_sources
                     source_passage = " ".join([s["text"] for s in sources])
                 
-                verification_result = analyze_hallucination(source_passage, pasted_text)
-                if not sources and use_web_verify:
-                    st.error("🕵️ No web sources found for this claim. Try simplifying the text or providing a manual Ground Truth.")
+                if not sources:
+                    st.error("🕵️ No sources found. Try simplifying the text or providing a manual Ground Truth.")
                 else:
+                    verification_result = analyze_hallucination(source_passage, pasted_text)
                     render_results(verification_result, pasted_text, sources)
 
     with tab3:
